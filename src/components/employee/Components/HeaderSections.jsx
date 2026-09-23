@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from "framer-motion";
 import { Users } from 'lucide-react';
 
-const HeaderSections = () => {
+const HeaderSections = ({ totalEmployees = 0 }) => {
     return (
          <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -22,7 +22,7 @@ const HeaderSections = () => {
             </p>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold">546</div>
+            <div className="text-2xl font-bold">{totalEmployees}</div>
             <div className="text-purple-200 text-sm">Total Employees</div>
           </div>
         </div>

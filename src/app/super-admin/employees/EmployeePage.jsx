@@ -20,6 +20,7 @@ import StateCardSections from "@/components/employee/Components/StateCardSection
 import { Tabs, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
 import OnboardingTab from "@/components/employee/EmployeeOnboarding/OnboardingTab";
 import EmployeeTab from "@/components/employee/EmployeeOnboarding/EmployeeTab";
+import { fetchEmployeesFromSupabase } from "@/app/api/employeeProfiles";
 
 const departments = [
   "All",
@@ -125,49 +126,54 @@ const EmployeePage = () => {
   );
   const [status, setStatus] = useState(searchParams.get("status") || "Total");
   const [directory, setDirectory] = useState(
-    searchParams.get("directory") || "onboarding"
+    searchParams.get("directory") || "employee"
   );
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1);
-  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 12;
 
   const [employmentCounts, setEmploymentCounts] = useState({});
   const [statusCounts, setStatusCounts] = useState({});
   const [totalEmployeesCount, setTotalEmployeesCount] = useState(0);
-  const [onboardingRequests, setOnboardingRequests] = useState([]);
+  // "Onboarding requests" (HR-initiated invite links) is a separate,
+  // not-yet-built feature — kept empty here rather than showing the real
+  // employee list mislabeled as pending requests.
+  const [onboardingRequests] = useState([]);
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch employees and counts
+  // Fetch employees and counts from Supabase
   const fetchEmployees = async () => {
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        ...(search ? { search } : {}),
-        ...(department && department !== "All" ? { department } : {}),
-        ...(employmentType && employmentType !== "Total"
-          ? { employmentType }
-          : {}),
-        ...(status && status !== "Total" ? { status } : {}),
-        ...(directory ? { directory } : {}),
-      });
-
-      const res = await fetch(
-        `https://code360.pro/api/get-employee?${params.toString()}`
-      );
-      const data = await res.json();
-
+      const data = await fetchEmployeesFromSupabase();
       if (data.success) {
-        setEmployees(data.data);
-        setTotalPages(data.totalPages);
+        setAllEmployees(data.data);
         setEmploymentCounts(data.counts.employmentTypeCounts || {});
-        setStatusCounts(data.counts.statusCounts || {});
-        setOnboardingRequests(data.data);
-        setTotalEmployeesCount(
-          data.counts.totalEmployees || data.totalEmployees || 0
-        );
+        setTotalEmployeesCount(data.counts.totalEmployees || 0);
       }
     } catch (err) {
       console.error("Error fetching employees:", err);
     }
   };
+
+  // Client-side search/department filter + pagination over the fetched list
+  useEffect(() => {
+    let filtered = allEmployees;
+    if (search) {
+      const term = search.toLowerCase();
+      filtered = filtered.filter(
+        (e) =>
+          e.fullName?.toLowerCase().includes(term) ||
+          e.email?.toLowerCase().includes(term) ||
+          e.phone?.toLowerCase().includes(term) ||
+          e.employeeId?.toLowerCase().includes(term)
+      );
+    }
+    if (department && department !== "All") {
+      filtered = filtered.filter((e) => e.department === department);
+    }
+    setTotalPages(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
+    setEmployees(filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+  }, [allEmployees, search, department, page]);
 
   // Update URL when filters change
   useEffect(() => {
@@ -183,16 +189,19 @@ const EmployeePage = () => {
     router.replace(`/super-admin/employees?${params.toString()}`);
   }, [search, department, employmentType, status, directory, page]);
 
-  // Fetch data when filters change
+  // Fetch once on mount; search/department/page filtering happens client-side
+  // over the already-fetched list (see the effect above), and a 30s refresh
+  // catches changes made elsewhere without hammering the database every 5s
+  // the way the old polling did.
   useEffect(() => {
     fetchEmployees();
-    const interval = setInterval(fetchEmployees, 5000);
+    const interval = setInterval(fetchEmployees, 30000);
     return () => clearInterval(interval);
-  }, [search, department, employmentType, status, directory, page]);
+  }, []);
 
   return (
     <div className="space-y-8 p-5">
-      <HeaderSections />
+      <HeaderSections totalEmployees={totalEmployeesCount} />
       <StateCardSections
         employmentTypes={employmentTypes}
         employmentType={employmentType}
@@ -260,6 +269,7 @@ const EmployeePage = () => {
             department={department}
             departments={departments}
             employees={employees}
+            refreshEmployees={fetchEmployees}
           ></EmployeeTab>
         </>
       )}

@@ -93,11 +93,13 @@ export default function EmployeeDetailsDialog({
             <div className="space-y-4">
               <div>
                 <Label className="text-gray-500">Gross Salary</Label>
-                <p className="mt-2">৳ {employee.grossSalary}</p>
+                <p className="mt-2">
+                  {employee.grossSalary ? `৳ ${employee.grossSalary}` : "N/A"}
+                </p>
               </div>
               <div>
                 <Label className="text-gray-500">Reporting Manager</Label>
-                <p className="mt-2">{employee.reportingManager}</p>
+                <p className="mt-2">{employee.reportingManager || "N/A"}</p>
               </div>
               {/* <div>
                 <Label className="text-gray-500">Basic Salary</Label>

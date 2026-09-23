@@ -1,15 +1,19 @@
 // api/department.js
-export const fetchDepartments = async (page = 1, search = "") => {
+import { supabase } from "@/utils/supabaseClient";
+
+// Reads from the new Supabase `departments` table. Kept the same
+// {success, data: [{_id, name, code}]} shape the rest of the app already
+// expects, so nothing downstream needed to change.
+export const fetchDepartments = async (_page = 1, search = "") => {
   try {
-    const res = await fetch(
-      `https://code360.pro/api/get-department?page=${page}&name=${search}`
-    );
-    const data = await res.json();
-    if (data.success) {
-      return data;
-    } else {
-      throw new Error(data.message || "Failed to fetch departments");
-    }
+    let query = supabase.from("departments").select("id, name, code").order("name");
+    if (search) query = query.ilike("name", `%${search}%`);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return {
+      success: true,
+      data: (data || []).map((d) => ({ _id: d.id, name: d.name, code: d.code })),
+    };
   } catch (error) {
     console.error("fetchDepartments error:", error);
     throw error;

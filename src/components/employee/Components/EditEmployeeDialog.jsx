@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import axios from "axios";
 import { useMyTeam } from "@/app/hook/useMyTeam";
+import { updateEmployeeProfile } from "@/app/api/employeeProfiles";
 
 const designations = [
   "CEO",
@@ -32,15 +32,32 @@ const designations = [
   "System_Admin",
 ];
 
+// Normalizes a date value (Date, ISO string, or "") to a plain "YYYY-MM-DD"
+// string so old vs. new values can be compared reliably.
+function toDateOnly(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
+}
+
 export default function EditEmployeeDialog({
   open,
   onClose,
   editFormData,
   setEditFormData,
+  originalEmployee,
   refreshEmployees,
-  fetchEmployees
 }) {
   const { departments } = useMyTeam();
+  const [remark, setRemark] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const designationChanged =
+    (editFormData.designation || "") !== (originalEmployee?.designation || "");
+  const joiningDateChanged =
+    toDateOnly(editFormData.joiningDate) !== toDateOnly(originalEmployee?.joiningDate);
+  const remarkRequired = designationChanged || joiningDateChanged;
 
   const onSave = async () => {
     if (!editFormData._id) {
@@ -48,23 +65,52 @@ export default function EditEmployeeDialog({
       return;
     }
 
-    try {
-      const response = await axios.put(
-        `https://code360.pro/api/update-user-data/${editFormData._id}`,
-        editFormData
+    if (remarkRequired && !remark.trim()) {
+      toast.error(
+        "Please add a remark explaining the designation/joining date change before saving."
       );
+      return;
+    }
 
-      if (response.data.success) {
-        toast.success("Employee updated successfully!");
-        onClose();
-        if (refreshEmployees) refreshEmployees();
-        if (fetchEmployees) fetchEmployees();
-      } else {
-        toast.error(response.data.message || "Failed to update employee.");
-      }
+    const selectedDept = departments?.find((d) => d.name === editFormData.department);
+
+    const updates = {
+      full_name: editFormData.fullName || null,
+      phone: editFormData.phone || null,
+      department_id: selectedDept ? selectedDept._id : editFormData.departmentId || null,
+      designation: editFormData.designation || null,
+      role: editFormData.role || "Employee",
+      employment_type: editFormData.employmentType || "Probation",
+      joining_date: editFormData.joiningDate ? toDateOnly(editFormData.joiningDate) : null,
+      status: editFormData.status || "active",
+      present_address: editFormData.presentAddress || null,
+      permanent_address: editFormData.permanentAddress || null,
+      date_of_birth: editFormData.dateOfBirth ? toDateOnly(editFormData.dateOfBirth) : null,
+      gender: editFormData.gender || null,
+    };
+
+    const previous = {
+      designation: originalEmployee?.designation || "",
+      joining_date: originalEmployee?.joiningDate ? toDateOnly(originalEmployee.joiningDate) : null,
+    };
+
+    try {
+      setSaving(true);
+      await updateEmployeeProfile({
+        profileId: editFormData._id,
+        updates,
+        previous,
+        remark: remark.trim() || null,
+      });
+      toast.success("Employee updated successfully!");
+      setRemark("");
+      onClose();
+      if (refreshEmployees) refreshEmployees();
     } catch (error) {
       console.error("Error updating employee:", error);
-      toast.error("Something went wrong while updating employee.");
+      toast.error(error?.message || "Something went wrong while updating employee.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -98,14 +144,13 @@ export default function EditEmployeeDialog({
               />
             </div>
             <div>
-              <Label className="mb-2 text-gray-500" htmlFor="edit-email">Email *</Label>
+              <Label className="mb-2 text-gray-500" htmlFor="edit-email">Email</Label>
               <Input
                 id="edit-email"
                 type="email"
                 value={editFormData.email || ""}
-                onChange={(e) =>
-                  setEditFormData({ ...editFormData, email: e.target.value })
-                }
+                disabled
+                title="Email is tied to the employee's sign-in account and can't be changed here."
               />
             </div>
             <div>
@@ -121,7 +166,7 @@ export default function EditEmployeeDialog({
             <div>
               <Label className="mb-2 text-gray-500" htmlFor="edit-status">Status</Label>
               <Select
-                value={editFormData.status || "pending"}
+                value={editFormData.status || "active"}
                 onValueChange={(value) =>
                   setEditFormData({ ...editFormData, status: value })
                 }
@@ -130,9 +175,9 @@ export default function EditEmployeeDialog({
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="inProgress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inProgress">Needs Update</SelectItem>
+                  <SelectItem value="locked">Locked</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -207,7 +252,7 @@ export default function EditEmployeeDialog({
             <div>
               <Label className="mb-2 text-gray-500" htmlFor="edit-employment-type">Employment Type</Label>
               <Select
-                value={editFormData.employmentType || "Permanent"}
+                value={editFormData.employmentType || "Probation"}
                 onValueChange={(value) =>
                   setEditFormData({ ...editFormData, employmentType: value })
                 }
@@ -222,6 +267,40 @@ export default function EditEmployeeDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label className="mb-2 text-gray-500" htmlFor="edit-joining-date">Joining Date</Label>
+              <Input
+                id="edit-joining-date"
+                type="date"
+                value={toDateOnly(editFormData.joiningDate)}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, joiningDate: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <Label className="mb-2 text-gray-500" htmlFor="edit-remark">
+              Remark {remarkRequired && <span className="text-red-500">*</span>}
+            </Label>
+            <Textarea
+              id="edit-remark"
+              placeholder={
+                remarkRequired
+                  ? "Required: explain the reason for this designation/joining date change"
+                  : "Optional note about this update"
+              }
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+            />
+            {remarkRequired && (
+              <p className="text-xs text-amber-600 mt-1">
+                A remark is required when changing designation or joining date — it's saved to this
+                employee's history.
+              </p>
+            )}
           </div>
         </TabsContent>
 
@@ -265,11 +344,7 @@ export default function EditEmployeeDialog({
               <Input
                 id="edit-dob"
                 type="date"
-                value={
-                  editFormData.dateOfBirth
-                    ? new Date(editFormData.dateOfBirth).toISOString().split("T")[0]
-                    : ""
-                }
+                value={toDateOnly(editFormData.dateOfBirth)}
                 onChange={(e) =>
                   setEditFormData({
                     ...editFormData,
@@ -302,12 +377,16 @@ export default function EditEmployeeDialog({
       </Tabs>
 
       <div className="flex justify-end gap-3 mt-6">
-        <Button variant="outline" onClick={onClose} className="rounded-lg font-bold">
+        <Button variant="outline" onClick={onClose} className="rounded-lg font-bold" disabled={saving}>
           Cancel
         </Button>
-        <Button onClick={onSave} className="bg-slate-900 hover:bg-slate-800 rounded-lg font-bold">
+        <Button
+          onClick={onSave}
+          className="bg-slate-900 hover:bg-slate-800 rounded-lg font-bold"
+          disabled={saving}
+        >
           <Save className="w-4 h-4 mr-2" />
-          Update Employee
+          {saving ? "Saving..." : "Update Employee"}
         </Button>
       </div>
     </AccessibleDialog>

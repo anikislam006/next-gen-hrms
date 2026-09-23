@@ -31,6 +31,7 @@ const EmployeeTab = ({
   department,
   setDepartment,
   employees,
+  refreshEmployees,
 }) => {
   const [viewMode, setViewMode] = useState("grid");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -139,9 +140,9 @@ const EmployeeTab = ({
                   key={emp._id}
                   employee={emp}
                   viewMode={viewMode}
-                  demoMode={true}
                   onView={() => console.log("View employee", emp)}
                   departments={departments} // Passing dynamic depts for internal card logic
+                  refreshEmployees={refreshEmployees}
                 />
               ))
             ) : (

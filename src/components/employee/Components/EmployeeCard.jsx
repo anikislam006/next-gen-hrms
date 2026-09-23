@@ -4,12 +4,12 @@ import { motion } from "framer-motion";
 import { Calendar, Clock, Mail, Lock, Unlock, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import axios from "axios";
 import { toast } from "sonner";
 import EmployeeDetailsDialog from "./EmployeeDetailsDialog";
 import EditEmployeeDialog from "./EditEmployeeDialog";
+import { setEmployeeLocked } from "@/app/api/employeeProfiles";
 
-export default function EmployeeCard({ employee, departments }) {
+export default function EmployeeCard({ employee, departments, refreshEmployees }) {
   const [emp, setEmp] = useState(employee);
   const [loading, setLoading] = useState(false);
 
@@ -17,29 +17,23 @@ export default function EmployeeCard({ employee, departments }) {
   const [showEditEmployee, setShowEditEmployee] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [editFormData, setEditFormData] = useState({});
+  // Pristine snapshot taken when the edit dialog opens, so the dialog can
+  // tell whether designation/joining date actually changed (BIZ-EMP-06).
+  const [originalEmployee, setOriginalEmployee] = useState(null);
+
+  const isLocked = emp.status === "locked";
 
   const handleToggleLock = async () => {
     try {
-      const action = emp.employmentType === "Locked" ? "unlock" : "lock";
+      const action = isLocked ? "unlock" : "lock";
       if (!window.confirm(`Are you sure you want to ${action} this employee?`))
         return;
 
       setLoading(true);
-      const endpoint =
-        action === "lock"
-          ? `https://code360.pro/api/add-locked/${emp._id}`
-          : `https://code360.pro/api/add-unlocked/${emp._id}`;
-      const res = await axios.put(endpoint);
-      if (res.data.success) {
-        toast.success(res.data.message);
-        setEmp((prev) => ({
-          ...prev,
-          employmentType:
-            action === "lock"
-              ? "Locked"
-              : prev.storeEmploymentType || "Unknown",
-        }));
-      } else toast.error(res.data.message || "Action failed");
+      await setEmployeeLocked(emp._id, action === "lock");
+      toast.success(`Employee ${action === "lock" ? "locked" : "unlocked"} successfully!`);
+      setEmp((prev) => ({ ...prev, status: action === "lock" ? "locked" : "active" }));
+      if (refreshEmployees) refreshEmployees();
     } catch (err) {
       console.error(err);
       toast.error("Error processing action");
@@ -55,25 +49,21 @@ export default function EmployeeCard({ employee, departments }) {
 
   const handleEditClick = () => {
     setEditFormData(selectedEmployee);
+    setOriginalEmployee(selectedEmployee);
     setShowEmployeeDetails(false);
     setShowEditEmployee(true);
   };
 
-  const handleUpdateEmployee = async () => {
-    toast.success("Employee updated successfully!");
-    setShowEditEmployee(false);
-  };
-
   const roleInfo = {
-    label: `${employee.role} (${employee.hr_level})`,
+    label: employee.designation ? `${employee.role} — ${employee.designation}` : employee.role,
     icon: User,
     colorClass: "bg-purple-100",
     textColor: "text-purple-700",
   };
 
-  const tenure = `${
-    new Date().getFullYear() - new Date(employee.joiningDate).getFullYear()
-  } year(s)`;
+  const tenure = employee.joiningDate
+    ? `${Math.max(0, new Date().getFullYear() - new Date(employee.joiningDate).getFullYear())} year(s)`
+    : "N/A";
 
   return (
     <>
@@ -104,7 +94,7 @@ export default function EmployeeCard({ employee, departments }) {
                 disabled={loading}
                 className="p-1 rounded-full hover:bg-gray-100 transition"
               >
-                {emp.employmentType === "Locked" ? (
+                {emp.status === "locked" ? (
                   <Lock className="w-4 h-4 text-gray-400" />
                 ) : (
                   <Unlock className="w-4 h-4 text-orange-500" />
@@ -133,7 +123,9 @@ export default function EmployeeCard({ employee, departments }) {
             <div className="text-xs text-gray-500 space-y-1 mt-2">
               <div className="flex items-center gap-1">
                 <Calendar className="w-3 h-3" /> Joined:{" "}
-                {new Date(employee.joiningDate).toLocaleDateString()}
+                {employee.joiningDate
+                  ? new Date(employee.joiningDate).toLocaleDateString()
+                  : "N/A"}
               </div>
               <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Tenure: {tenure}
@@ -162,8 +154,8 @@ export default function EmployeeCard({ employee, departments }) {
         onClose={() => setShowEditEmployee(false)}
         editFormData={editFormData}
         setEditFormData={setEditFormData}
-        onSave={handleUpdateEmployee}
-        departments={departments}
+        originalEmployee={originalEmployee}
+        refreshEmployees={refreshEmployees}
       />
     </>
   );
