@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
 import Cookies from 'js-cookie';
+import { supabase } from '@/utils/supabaseClient';
 
 const AuthContext = createContext();
 
@@ -11,40 +12,37 @@ export function AuthProvider({ children }) {
   // Load user from cookies on mount
   useEffect(() => {
     const token = Cookies.get("token");
+    const id = Cookies.get("id");
     const name = Cookies.get("name");
     const role = Cookies.get("role");
     const email = Cookies.get("email");
 
     if (token && name && role) {
-      setUser({ token, name, role, email });
+      setUser({ token, id, name, role, email });
     }
   }, []);
 
-  // Fetch all users when user (token) changes
+  // Fetch the full HR profile from Supabase when the signed-in user changes
   useEffect(() => {
-    if (!user?.token) {
+    if (!user?.id) {
       setUserAllDetails(null);
       return;
     }
 
     const fetchUserData = async () => {
       try {
-        const res = await fetch(
-          `https://code360.pro/api/user-all`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${user.token}`,
-            },
-          }
-        );
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-        if (res.ok) {
-          const data = await res.json();
-          setUserAllDetails(data.user);
-        } else {
-          console.error('Failed to fetch user data');
+        if (error) {
+          console.error('Failed to fetch user profile:', error.message);
+          return;
         }
+
+        setUserAllDetails(data);
       } catch (err) {
         console.error('Error fetching user data:', err);
       }

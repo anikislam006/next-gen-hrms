@@ -5,13 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/utils/supabaseClient";
 import { motion } from "framer-motion";
 
 const NavbarHome = () => {
   const { user, setUser } = useAuth();
   const router = useRouter();
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    Cookies.remove("id");
     Cookies.remove("token");
     Cookies.remove("name");
     Cookies.remove("role");

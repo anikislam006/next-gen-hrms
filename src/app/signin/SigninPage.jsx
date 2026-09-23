@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import "../globals.css";
 import { useState } from "react";
+import { supabase } from "@/utils/supabaseClient";
 
 const schema = z.object({
   email: z.string().email(),
@@ -33,46 +34,53 @@ export default function SignInPage() {
 
   const onSubmit = async (data) => {
     try {
-      const res = await fetch(`https://code360.pro/api/signin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
       });
 
-      const json = await res.json();
-      if (!res.ok) {
-        alert(json.message || "Login failed");
+      if (error) {
+        alert(error.message || "Login failed");
         return;
       }
 
-      if (json.locked) {
-        Cookies.set("token", json.token, { expires: 7 });
-        Cookies.set("role", json.user.role, { expires: 7 });
-        Cookies.set("name", json.user.name, { expires: 7 });
-        Cookies.set("email", json.user.email, { expires: 7 });
+      // Look up this person's HR profile (role, name, status) now that they're authenticated.
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("full_name, role, status")
+        .eq("id", authData.user.id)
+        .single();
 
-        setUser({
-          token: json.token,
-          role: json.user.role,
-          name: json.user.name,
-          email: json.user.email,
-        });
-
-        setLockedMessage(json.message);
+      if (profileError || !profile) {
+        alert(
+          "Signed in, but no HR profile is set up for this account yet. Please contact your administrator."
+        );
+        await supabase.auth.signOut();
         return;
       }
 
-      Cookies.set("token", json.token, { expires: 7 });
-      Cookies.set("role", json.user.role, { expires: 7 });
-      Cookies.set("name", json.user.name, { expires: 7 });
-      Cookies.set("email", json.user.email, { expires: 7 });
+      const sessionInfo = {
+        token: authData.session.access_token,
+        id: authData.user.id,
+        role: profile.role,
+        name: profile.full_name,
+        email: authData.user.email,
+      };
 
-      setUser({
-        token: json.token,
-        role: json.user.role,
-        name: json.user.name,
-        email: json.user.email,
-      });
+      Cookies.set("token", sessionInfo.token, { expires: 7 });
+      Cookies.set("id", sessionInfo.id, { expires: 7 });
+      Cookies.set("role", sessionInfo.role, { expires: 7 });
+      Cookies.set("name", sessionInfo.name, { expires: 7 });
+      Cookies.set("email", sessionInfo.email, { expires: 7 });
+
+      setUser(sessionInfo);
+
+      if (profile.status === "locked") {
+        setLockedMessage(
+          "Your account has been locked. Please contact your administrator."
+        );
+        return;
+      }
 
       router.replace(next);
     } catch (error) {
@@ -85,19 +93,22 @@ export default function SignInPage() {
     if (!email) return alert("Please enter your email first");
 
     try {
-      const res = await fetch(`https://code360.pro/api/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo:
+          typeof window !== "undefined"
+            ? `${window.location.origin}/reset-password`
+            : undefined,
       });
-      const data = await res.json();
-      alert(data.message);
-      if (res.ok) {
-        router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+
+      if (error) {
+        alert(error.message || "Failed to send reset link");
+        return;
       }
+
+      alert("If that email has an account, a password reset link has been sent.");
     } catch (err) {
       console.error(err);
-      alert("Failed to send reset code");
+      alert("Failed to send reset link");
     }
   };
 

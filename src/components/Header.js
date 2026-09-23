@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/utils/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Settings, 
@@ -37,8 +38,9 @@ export default function Header() {
   const profileRef = useRef(null);
 
   // Sign out logic
-  const handleSignOut = () => {
-    ["token", "name", "role", "email"].forEach((c) => Cookies.remove(c));
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    ["token", "id", "name", "role", "email"].forEach((c) => Cookies.remove(c));
     setUser(null);
     router.push("/signin");
   };
