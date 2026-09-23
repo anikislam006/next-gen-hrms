@@ -5,6 +5,7 @@ import {
   History, Download, Filter,
 } from "lucide-react";
 import { usePayroll } from "@/app/hook/usePayroll";
+import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const PayrollRecord = () => {
   const {
@@ -22,6 +24,11 @@ const PayrollRecord = () => {
     handleDeletePayrollRecord,
     handleUpdatePayrollStatus,
   } = usePayroll();
+  const { user } = useAuth();
+  // BIZ-PAY-04: only a SuperAdmin login (the CEO account) can sign payroll off
+  // as Approved — the database enforces this too, this just avoids offering
+  // an option that would be rejected.
+  const canApprove = user?.role === "SuperAdmin";
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -137,22 +144,29 @@ const PayrollRecord = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-6">
-                  {/* Status Dropdown (Functional) */}
+                  {/* Status Dropdown — CEO approval gate is enforced by the database */}
                   <select
                     value={record.status || "Processed"}
-                    onChange={(e) =>
-                      handleUpdatePayrollStatus(record._id, e.target.value)
-                    }
+                    onChange={async (e) => {
+                      const result = await handleUpdatePayrollStatus(record._id, e.target.value);
+                      if (result && result.success === false) {
+                        toast.error(result.message || "Could not update status");
+                      }
+                    }}
                     className="text-xs font-bold border-none bg-transparent cursor-pointer focus:ring-0 outline-none text-slate-500"
                   >
                     <option value="Processed">Processed</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Paid">Paid</option>
+                    <option value="Approved" disabled={!canApprove}>
+                      Approved{!canApprove ? " (SuperAdmin only)" : ""}
+                    </option>
+                    <option value="Paid" disabled={record.status !== "Approved" && record.status !== "Paid"}>
+                      Paid{record.status !== "Approved" && record.status !== "Paid" ? " (needs approval first)" : ""}
+                    </option>
                   </select>
 
                   <div className="text-right min-w-[120px]">
                     <p className="font-semibold text-slate-900">
-                      {formatCurrency(record.grossSalary)}
+                      {formatCurrency(record.netSalary)}
                     </p>
                     <p className="text-sm text-gray-600">Net Salary</p>
                   </div>

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlusCircle, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { usePayroll } from "@/app/hook/usePayroll";
 
 const CreateStructureDialog = () => {
@@ -35,6 +36,7 @@ const CreateStructureDialog = () => {
     title: "",
     basic_min: "",
     basic_max: "",
+    epf_applicable: true,
   });
 
   // Handle Submission with API call
@@ -57,6 +59,7 @@ const CreateStructureDialog = () => {
           title: "",
           basic_min: "",
           basic_max: "",
+          epf_applicable: true,
         });
       } else {
         alert(result.message || "Failed to create structure");
@@ -169,6 +172,23 @@ const CreateStructureDialog = () => {
                 required
               />
             </div>
+          </div>
+
+          {/* EPF Applicability (BIZ-PAY-01) */}
+          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg border border-slate-100">
+            <div>
+              <Label htmlFor="epf_applicable">EPF Applicable</Label>
+              <p className="text-xs text-gray-500">
+                Whether Provident Fund (10% of Basic) applies to employees on this structure
+              </p>
+            </div>
+            <Switch
+              id="epf_applicable"
+              checked={structureForm.epf_applicable}
+              onCheckedChange={(checked) =>
+                setStructureForm((prev) => ({ ...prev, epf_applicable: checked }))
+              }
+            />
           </div>
 
           {/* Footer Actions */}

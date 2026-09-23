@@ -20,16 +20,18 @@ export const fetchDepartments = async (_page = 1, search = "") => {
   }
 };
 
+// Writes now go to the same Supabase `departments` table fetchDepartments
+// reads from (previously these hit the old code360 backend while reads came
+// from Supabase, so anything created here silently never showed up anywhere).
 export const createDepartment = async (deptForm) => {
   try {
-    const res = await fetch("https://code360.pro/api/add-department", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(deptForm),
-    });
-    const data = await res.json();
-    if (data.success) return data;
-    throw new Error(data.message || "Failed to create department");
+    const { data, error } = await supabase
+      .from("departments")
+      .insert({ name: deptForm.name, code: deptForm.code })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { success: true, data: { _id: data.id, name: data.name, code: data.code } };
   } catch (error) {
     console.error("createDepartment error:", error);
     throw error;
@@ -38,14 +40,9 @@ export const createDepartment = async (deptForm) => {
 
 export const deleteDepartment = async (departmentId) => {
   try {
-    const res = await fetch("https://code360.pro/api/delete-department", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ departmentId }),
-    });
-    const data = await res.json();
-    if (data.success) return data;
-    throw new Error(data.message || "Failed to delete department");
+    const { error } = await supabase.from("departments").delete().eq("id", departmentId);
+    if (error) throw new Error(error.message);
+    return { success: true };
   } catch (error) {
     console.error("deleteDepartment error:", error);
     throw error;
@@ -54,45 +51,28 @@ export const deleteDepartment = async (departmentId) => {
 
 export const assignDepartmentHead = async (departmentId, headData) => {
   try {
-    const res = await fetch(
-      `https://code360.pro/api/add-department-head/${departmentId}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(headData),
-      }
-    );
-
-    const data = await res.json();
-
-    if (!data.success) {
-      throw new Error(data.message || "Failed to assign department head");
-    }
-
-    return data;
+    const { data, error } = await supabase
+      .from("departments")
+      .update({ department_head_id: headData.departmentHeadObjectId })
+      .eq("id", departmentId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { success: true, data };
   } catch (error) {
     console.error("assignDepartmentHead error:", error);
     throw error;
   }
 };
 
-
 export const removeDepartmentHead = async (departmentId) => {
   try {
-    const res = await fetch(
-      `https://code360.pro/api/remove-department-head/${departmentId}`,
-      {
-        method: "DELETE",
-      }
-    );
-
-    const data = await res.json();
-
-    if (!data.success) {
-      throw new Error(data.message || "Failed to remove department head");
-    }
-
-    return data;
+    const { error } = await supabase
+      .from("departments")
+      .update({ department_head_id: null })
+      .eq("id", departmentId);
+    if (error) throw new Error(error.message);
+    return { success: true };
   } catch (error) {
     console.error("removeDepartmentHead error:", error);
     throw error;
