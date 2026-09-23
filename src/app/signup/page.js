@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../../components/ui/textarea";
 import { Progress } from "../../components/ui/progress";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/utils/supabaseClient";
 
 export default function MultiStepForm() {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function MultiStepForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [registered, setRegistered] = useState(false);
 
   const [formData, setFormData] = useState({
     email:  "",
@@ -82,26 +84,77 @@ export default function MultiStepForm() {
       setError('Full name, email, and password are required');
       return;
     }
+    if (formData.password !== formData.confirm_password) {
+      setError('Passwords do not match');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`https://code360.pro/api/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          // Carried into auth.users.raw_user_meta_data; a database trigger
+          // (handle_new_user) reads this and creates the matching HR
+          // profile row automatically — no separate backend call needed.
+          data: {
+            full_name: formData.fullName,
+            phone: formData.phone,
+            date_of_birth: formData.date_of_birth || null,
+            gender: formData.gender,
+            marital_status: formData.marital_status,
+            nationality: formData.nationality,
+            blood_group: formData.blood_group,
+            nid_number: formData.nid_number,
+            tin_number: formData.tin_number,
+            passport_number: formData.passport_number,
+            present_address: formData.present_address,
+            permanent_address: formData.permanent_address,
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_relation: formData.emergency_contact_relation,
+          },
+          emailRedirectTo:
+            typeof window !== 'undefined' ? `${window.location.origin}/verify` : undefined,
+        },
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message || "Signup failed");
-      } else {
-        router.push(`/verify?userId=${data.userId}`);
+      if (signUpError) {
+        setError(signUpError.message || 'Signup failed');
+        return;
       }
+
+      // If email confirmations are off for this project, Supabase returns a
+      // live session immediately and the person is effectively already
+      // signed up and could sign in right away. Either way, send them to
+      // sign in rather than assuming a session exists here.
+      setRegistered(true);
     } catch (err) {
       setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (registered) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8 flex items-center justify-center">
+        <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
+          <CardContent className="p-8 text-center">
+            <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Check Your Email</h2>
+            <p className="text-gray-600 mb-6">
+              We've sent a confirmation link to <b>{formData.email}</b>. Click it to activate
+              your account, then sign in.
+            </p>
+            <Button onClick={() => router.push('/signin')} className="w-full">
+              Go to Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8">
