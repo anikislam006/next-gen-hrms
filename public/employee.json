@@ -1,0 +1,37 @@
+[
+  {
+    "_id": "68e252437aafdef4d049e5f8",
+    "employeeId": "360362",
+    "fullName": "Jubair Ahmed",
+    "email": "jubairahmed060@gmail.com",
+    "phone": "01629964630",
+    "department": "Engineering",
+    "designation": "Software Engineer",
+    "joiningDate": "2025-09-25T00:00:00.000Z",
+    "employmentType": "Permanent",
+    "grossSalary": "65677",
+    "reportingManagerDept": "Engineering",
+    "role": "HrAdmin",
+    "status": "completed/pending/inProgress/expired",
+    "createdAt": "2025-09-24T11:33:43.438Z",
+    "bloodGroup": "A+",
+    "dateOfBirth": "2025-09-25T00:00:00.000Z",
+    "emergencyContact": {
+      "name": "Jubair Ahmed",
+      "phone": "01629964630",
+      "relation": "friend"
+    },
+    "gender": "Male",
+    "isVerified": true,
+    "maritalStatus": "Single",
+    "nationality": "bd",
+    "nidNumber": "234234",
+    "passportNumber": "2452345",
+    "password": "$2b$12$tq6bOu.ckKPv.hHI9P8AKeKSJ/nkNVrxbXokOlKP0QgqR3qe0agO2",
+    "permanentAddress": "sdfg",
+    "presentAddress": "sadfg",
+    "tinNumber": "242134",
+    "updatedAt": "2025-09-24T11:34:45.872Z",
+    "directory": "onboarding/hremail/completed"
+  }
+]

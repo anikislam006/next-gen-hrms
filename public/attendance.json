@@ -1,0 +1,264 @@
+{
+  "success": true,
+  "data": [
+    {
+      "employeeId": "360362",
+      "user": {
+        "employeeId": "360362",
+        "fullName": "Jubair Ahmed",
+        "email": "jubairahmed060@gmail.com",
+        "role": "SuperAdmin"
+      },
+      "attendance": [
+        {
+          "attendanceDate": "2025-11-03T04:05:00.000Z",
+          "clockInDate": "2025-11-03T04:05:00.000Z",
+          "clockOutDate": "2025-11-03T12:05:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8
+        },
+        {
+          "attendanceDate": "2025-11-10T04:12:00.000Z",
+          "clockInDate": "2025-11-10T04:12:00.000Z",
+          "clockOutDate": "2025-11-10T12:00:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.8
+        },
+        {
+          "attendanceDate": "2025-11-17T04:00:00.000Z",
+          "clockInDate": "2025-11-17T04:00:00.000Z",
+          "clockOutDate": "2025-11-17T12:10:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.1
+        },
+        {
+          "attendanceDate": "2025-11-24T04:08:00.000Z",
+          "clockInDate": "2025-11-24T04:08:00.000Z",
+          "clockOutDate": "2025-11-24T12:00:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.86
+        },
+        {
+          "attendanceDate": "2025-11-27T04:02:00.000Z",
+          "clockInDate": "2025-11-27T04:02:00.000Z",
+          "clockOutDate": "2025-11-27T12:04:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.03
+        },
+        {
+          "attendanceDate": "2025-11-30T04:15:00.000Z",
+          "clockInDate": "2025-11-30T04:15:00.000Z",
+          "clockOutDate": "2025-11-30T11:50:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.58
+        },
+
+        {
+          "attendanceDate": "2025-12-02T04:00:00.000Z",
+          "clockInDate": "2025-12-02T04:00:00.000Z",
+          "clockOutDate": "2025-12-02T12:05:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.08
+        },
+        {
+          "attendanceDate": "2025-12-09T04:10:00.000Z",
+          "clockInDate": "2025-12-09T04:10:00.000Z",
+          "clockOutDate": "2025-12-09T12:00:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.83
+        },
+        {
+          "attendanceDate": "2025-12-16T04:05:00.000Z",
+          "clockInDate": "2025-12-16T04:05:00.000Z",
+          "clockOutDate": "2025-12-16T12:10:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.08
+        },
+        {
+          "attendanceDate": "2025-12-23T04:12:00.000Z",
+          "clockInDate": "2025-12-23T04:12:00.000Z",
+          "clockOutDate": "2025-12-23T12:00:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.8
+        },
+        {
+          "attendanceDate": "2025-12-27T04:03:00.000Z",
+          "clockInDate": "2025-12-27T04:03:00.000Z",
+          "clockOutDate": "2025-12-27T12:06:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.05
+        },
+        {
+          "attendanceDate": "2025-12-30T04:18:00.000Z",
+          "clockInDate": "2025-12-30T04:18:00.000Z",
+          "clockOutDate": "2025-12-30T11:55:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.62
+        },
+
+        {
+          "attendanceDate": "2026-01-03T04:05:00.000Z",
+          "clockInDate": "2026-01-03T04:05:00.000Z",
+          "clockOutDate": "2026-01-03T12:00:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 7.92
+        },
+        {
+          "attendanceDate": "2026-01-10T04:12:00.000Z",
+          "clockInDate": "2026-01-10T04:12:00.000Z",
+          "clockOutDate": "2026-01-10T12:05:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.88
+        },
+        {
+          "attendanceDate": "2026-01-17T04:00:00.000Z",
+          "clockInDate": "2026-01-17T04:00:00.000Z",
+          "clockOutDate": "2026-01-17T12:10:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.17
+        },
+        {
+          "attendanceDate": "2026-01-24T04:08:00.000Z",
+          "clockInDate": "2026-01-24T04:08:00.000Z",
+          "clockOutDate": "2026-01-24T12:00:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.86
+        },
+        {
+          "attendanceDate": "2026-01-27T04:04:00.000Z",
+          "clockInDate": "2026-01-27T04:04:00.000Z",
+          "clockOutDate": "2026-01-27T12:06:00.000Z",
+          "breaks": [],
+          "status": "On-time",
+          "workingHours": 8.03
+        },
+        {
+          "attendanceDate": "2026-01-30T04:15:00.000Z",
+          "clockInDate": "2026-01-30T04:15:00.000Z",
+          "clockOutDate": "2026-01-30T11:55:00.000Z",
+          "breaks": [],
+          "status": "Late",
+          "workingHours": 7.67
+        }
+      ]
+    },
+    {
+      "employeeId": "360360",
+      "user": {
+        "employeeId": "360360",
+        "fullName": "Rahim Uddin",
+        "email": "rahim@gmail.com",
+        "role": "Admin"
+      },
+      "attendance": [
+        {
+          "attendanceDate": "2026-01-18T03:55:20.210Z",
+          "clockInDate": "2026-01-18T03:55:20.210Z",
+          "clockOutDate": "2026-01-18T11:45:10.530Z",
+          "breaks": [
+            {
+              "startDate": "2026-01-18T06:00:10.000Z",
+              "endDate": "2026-01-18T06:10:20.000Z"
+            }
+          ],
+          "status": "On-time",
+          "workingHours": 7.83
+        }
+      ]
+    },
+    {
+      "employeeId": "360361",
+      "user": {
+        "employeeId": "360361",
+        "fullName": "Afrin Jahan",
+        "email": "afrin@gmail.com",
+        "role": "Employee"
+      },
+      "attendance": [
+        {
+          "attendanceDate": "2026-01-17T04:15:40.300Z",
+          "clockInDate": "2026-01-17T04:15:40.300Z",
+          "clockOutDate": "2026-01-17T12:05:30.900Z",
+          "breaks": [
+            {
+              "startDate": "2026-01-17T07:30:00.000Z",
+              "endDate": "2026-01-17T07:40:00.000Z"
+            }
+          ],
+          "status": "Late",
+          "workingHours": 7.75
+        }
+      ]
+    },
+    {
+      "employeeId": "360363",
+      "user": {
+        "employeeId": "360363",
+        "fullName": "Sabbir Rahman",
+        "email": "sabbir@gmail.com",
+        "role": "Employee"
+      },
+      "attendance": [
+        {
+          "attendanceDate": "2026-01-16T04:05:10.200Z",
+          "clockInDate": "2026-01-16T04:05:10.200Z",
+          "clockOutDate": "2026-01-16T12:00:00.000Z",
+          "breaks": [
+            {
+              "startDate": "2026-01-16T08:00:00.000Z",
+              "endDate": "2026-01-16T08:15:00.000Z"
+            }
+          ],
+          "status": "On-time",
+          "workingHours": 7.75
+        }
+      ]
+    },
+    {
+      "employeeId": "360364",
+      "user": {
+        "employeeId": "360364",
+        "fullName": "Tanvir Hasan",
+        "email": "tanvir@gmail.com",
+        "role": "Admin"
+      },
+      "attendance": [
+        {
+          "attendanceDate": "2026-01-15T04:25:00.100Z",
+          "clockInDate": "2026-01-15T04:25:00.100Z",
+          "clockOutDate": "2026-01-15T11:50:00.000Z",
+          "breaks": [
+            {
+              "startDate": "2026-01-15T07:20:00.000Z",
+              "endDate": "2026-01-15T07:30:00.000Z"
+            }
+          ],
+          "status": "Late",
+          "workingHours": 7.42
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 5,
+    "pages": 1
+  }
+}
