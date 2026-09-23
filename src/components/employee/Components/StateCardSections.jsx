@@ -3,16 +3,18 @@ import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 
 
-const StateCardSections = ({employmentTypes, employmentType, employmentCounts, setEmploymentType}) => {
+const StateCardSections = ({employmentTypes, employmentType, employmentCounts, totalEmployees = 0, setEmploymentType, setPage}) => {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
       {employmentTypes.map((item, index) => {
         const Icon = item.icon;
+        // "Total" is the actual employee count, not a sum of the buckets below —
+        // those buckets mix two different dimensions (status vs. employment
+        // type), so a single employee can count in more than one of them and
+        // summing them overstated the total.
         const count =
-          item.label === "Total"
-            ? Object.values(employmentCounts).reduce((acc, val) => acc + val, 0)
-            : employmentCounts[item.label] || 0;
+          item.label === "Total" ? totalEmployees : employmentCounts[item.label] || 0;
 
         const isActive = employmentType === item.label;
 
@@ -26,7 +28,7 @@ const StateCardSections = ({employmentTypes, employmentType, employmentCounts, s
             whileTap={{ scale: 0.98 }}
             onClick={() => {
               setEmploymentType(item.label);
-              setPage(1);
+              if (setPage) setPage(1);
             }}
             className="cursor-pointer"
           >

@@ -171,9 +171,17 @@ const EmployeePage = () => {
     if (department && department !== "All") {
       filtered = filtered.filter((e) => e.department === department);
     }
+    // The stat cards above (Active/Permanent/Contract/Probation/Need Update/Locked)
+    // set this so clicking one actually filters the list, not just highlights the card.
+    if (employmentType && employmentType !== "Total") {
+      if (employmentType === "Active") filtered = filtered.filter((e) => e.status === "active");
+      else if (employmentType === "Locked") filtered = filtered.filter((e) => e.status === "locked");
+      else if (employmentType === "Need Update") filtered = filtered.filter((e) => e.status === "inProgress");
+      else filtered = filtered.filter((e) => e.employmentType === employmentType);
+    }
     setTotalPages(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
     setEmployees(filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
-  }, [allEmployees, search, department, page]);
+  }, [allEmployees, search, department, employmentType, page]);
 
   // Update URL when filters change
   useEffect(() => {
@@ -206,7 +214,9 @@ const EmployeePage = () => {
         employmentTypes={employmentTypes}
         employmentType={employmentType}
         employmentCounts={employmentCounts}
+        totalEmployees={totalEmployeesCount}
         setEmploymentType={setEmploymentType}
+        setPage={setPage}
       />
 
       {/* Directory toggle */}

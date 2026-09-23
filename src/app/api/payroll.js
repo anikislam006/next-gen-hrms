@@ -77,7 +77,10 @@ export const deletePayrollStructure = async (id) => {
 /* ========================== EMPLOYEE SALARIES ============================ */
 
 function toEmployeePayrollShape(row) {
-  const salary = (row.salary_settings && row.salary_settings[0]) || {};
+  // salary_settings.profile_id is UNIQUE, so PostgREST embeds this as a
+  // single object (or null), never an array — indexing [0] here always
+  // came back undefined and silently zeroed out every employee's salary.
+  const salary = row.salary_settings || {};
   const basicSalary = Number(salary.basic_salary || 0);
   const houseRent = Number(salary.house_rent || 0);
   const medicalAllowance = Number(salary.medical_allowance || 0);
