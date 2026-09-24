@@ -7,10 +7,11 @@ import {
   Users,
   CheckCircle,
   Award,
+  Layers,
   FileText,
   Clock,
   Bell,
-  Unlock,
+  UserX,
   XCircle,
   Loader,
   UserPlus,
@@ -20,6 +21,12 @@ import StateCardSections from "@/components/employee/Components/StateCardSection
 import { Tabs, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
 import OnboardingTab from "@/components/employee/EmployeeOnboarding/OnboardingTab";
 import EmployeeTab from "@/components/employee/EmployeeOnboarding/EmployeeTab";
+import { fetchEmployeesFromSupabase, getProbationMilestone } from "@/app/api/employeeProfiles";
+
+// Admin's Employee Management page — brought onto Supabase to match the
+// Super Admin version at src/app/super-admin/employees/EmployeePage.jsx.
+// This page used to call the old, now-dead code360.pro backend
+// (https://code360.pro/api/get-employee) and never showed real data.
 
 const departments = [
   "All",
@@ -30,15 +37,11 @@ const departments = [
   "Operations",
 ];
 
+// Card order/labels per the "Basic - employee things" doc — kept identical
+// to the Super Admin page so both portals show the same dashboard.
 const employmentTypes = [
   {
-    label: "Total",
-    icon: Users,
-    color: "text-blue-600",
-    textColor: "text-blue-900",
-  },
-  {
-    label: "Active",
+    label: "Active Employee",
     icon: CheckCircle,
     color: "text-green-600",
     textColor: "text-green-900",
@@ -50,13 +53,19 @@ const employmentTypes = [
     textColor: "text-purple-900",
   },
   {
+    label: "Semi Permanent",
+    icon: Layers,
+    color: "text-teal-600",
+    textColor: "text-teal-900",
+  },
+  {
     label: "Contract",
     icon: FileText,
     color: "text-orange-600",
     textColor: "text-orange-900",
   },
   {
-    label: "Probation",
+    label: "Probation & Confirmation",
     icon: Clock,
     color: "text-yellow-600",
     textColor: "text-yellow-900",
@@ -68,9 +77,8 @@ const employmentTypes = [
     textColor: "text-red-900",
   },
   {
-    label: "Locked",
-    value: 79,
-    icon: Unlock,
+    label: "Inactive employees",
+    icon: UserX,
     color: "text-indigo-600",
     textColor: "text-indigo-900",
   },
@@ -120,62 +128,81 @@ const EmployeePage = () => {
   const [department, setDepartment] = useState(
     searchParams.get("department") || "All"
   );
+  // Empty string means "no card filter" (show everyone) — none of the
+  // rebuilt cards represent "all employees" any more, so there's no card
+  // value to default to (the true all-time total lives in the header banner).
   const [employmentType, setEmploymentType] = useState(
-    searchParams.get("employmentType") || "Total"
+    searchParams.get("employmentType") || ""
   );
   const [status, setStatus] = useState(searchParams.get("status") || "Total");
   const [directory, setDirectory] = useState(
-    searchParams.get("directory") || "onboarding"
+    searchParams.get("directory") || "employee"
   );
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1);
-  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 12;
 
   const [employmentCounts, setEmploymentCounts] = useState({});
   const [statusCounts, setStatusCounts] = useState({});
   const [totalEmployeesCount, setTotalEmployeesCount] = useState(0);
-  const [onboardingRequests, setOnboardingRequests] = useState([]);
+  // "Onboarding requests" (HR-initiated invite links) is a separate,
+  // not-yet-built feature — kept empty here rather than showing the real
+  // employee list mislabeled as pending requests.
+  const [onboardingRequests] = useState([]);
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch employees and counts
+  // Fetch employees and counts from Supabase
   const fetchEmployees = async () => {
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        ...(search ? { search } : {}),
-        ...(department && department !== "All" ? { department } : {}),
-        ...(employmentType && employmentType !== "Total"
-          ? { employmentType }
-          : {}),
-        ...(status && status !== "Total" ? { status } : {}),
-        ...(directory ? { directory } : {}),
-      });
-
-      const res = await fetch(
-        `https://code360.pro/api/get-employee?${params.toString()}`
-      );
-      const data = await res.json();
-
+      const data = await fetchEmployeesFromSupabase();
       if (data.success) {
-        setEmployees(data.data);
-        setTotalPages(data.totalPages);
+        setAllEmployees(data.data);
         setEmploymentCounts(data.counts.employmentTypeCounts || {});
-        setStatusCounts(data.counts.statusCounts || {});
-        setOnboardingRequests(data.data);
-        setTotalEmployeesCount(
-          data.counts.totalEmployees || data.totalEmployees || 0
-        );
+        setTotalEmployeesCount(data.counts.totalEmployees || 0);
       }
     } catch (err) {
       console.error("Error fetching employees:", err);
     }
   };
 
+  // Client-side search/department filter + pagination over the fetched list
+  useEffect(() => {
+    let filtered = allEmployees;
+    if (search) {
+      const term = search.toLowerCase();
+      filtered = filtered.filter(
+        (e) =>
+          e.fullName?.toLowerCase().includes(term) ||
+          e.email?.toLowerCase().includes(term) ||
+          e.phone?.toLowerCase().includes(term) ||
+          e.employeeId?.toLowerCase().includes(term)
+      );
+    }
+    if (department && department !== "All") {
+      filtered = filtered.filter((e) => e.department === department);
+    }
+    // The stat cards above (Active Employee/Permanent/Semi Permanent/Contract/
+    // Probation & Confirmation/Need Update/Inactive employees) set this so
+    // clicking one actually filters the list, not just highlights the card.
+    if (employmentType) {
+      if (employmentType === "Active Employee") filtered = filtered.filter((e) => e.status === "active");
+      else if (employmentType === "Inactive employees") filtered = filtered.filter((e) => e.status === "locked");
+      else if (employmentType === "Need Update")
+        filtered = filtered.filter((e) => e.status === "inProgress" || getProbationMilestone(e));
+      else if (employmentType === "Probation & Confirmation")
+        filtered = filtered.filter((e) => e.employmentType === "Probation");
+      else filtered = filtered.filter((e) => e.employmentType === employmentType);
+    }
+    setTotalPages(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
+    setEmployees(filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+  }, [allEmployees, search, department, employmentType, page]);
+
   // Update URL when filters change
   useEffect(() => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (department !== "All") params.set("department", department);
-    if (employmentType !== "Total")
-      params.set("employmentType", employmentType);
+    if (employmentType) params.set("employmentType", employmentType);
     if (status !== "Total") params.set("status", status);
     if (directory) params.set("directory", directory);
     params.set("page", String(page));
@@ -183,21 +210,26 @@ const EmployeePage = () => {
     router.replace(`/admin/employees?${params.toString()}`);
   }, [search, department, employmentType, status, directory, page]);
 
-  // Fetch data when filters change
+  // Fetch once on mount; search/department/page filtering happens client-side
+  // over the already-fetched list (see the effect above), and a 30s refresh
+  // catches changes made elsewhere without hammering the database every 5s
+  // the way the old polling did.
   useEffect(() => {
     fetchEmployees();
-    const interval = setInterval(fetchEmployees, 5000);
+    const interval = setInterval(fetchEmployees, 30000);
     return () => clearInterval(interval);
-  }, [search, department, employmentType, status, directory, page]);
+  }, []);
 
   return (
     <div className="space-y-8 p-5">
-      <HeaderSections />
+      <HeaderSections totalEmployees={totalEmployeesCount} />
       <StateCardSections
         employmentTypes={employmentTypes}
         employmentType={employmentType}
         employmentCounts={employmentCounts}
+        totalEmployees={totalEmployeesCount}
         setEmploymentType={setEmploymentType}
+        setPage={setPage}
       />
 
       {/* Directory toggle */}
@@ -235,9 +267,6 @@ const EmployeePage = () => {
         </div>
       </Tabs>
 
-      {/* Employment Type Cards */}
-      {/* 💼 Employment Type Cards */}
-
       {/* Status Cards + Employee List */}
       {directory === "onboarding" ? (
         <>
@@ -260,6 +289,7 @@ const EmployeePage = () => {
             department={department}
             departments={departments}
             employees={employees}
+            refreshEmployees={fetchEmployees}
           ></EmployeeTab>
         </>
       )}
