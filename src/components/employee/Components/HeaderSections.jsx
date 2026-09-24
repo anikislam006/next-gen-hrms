@@ -23,7 +23,7 @@ const HeaderSections = ({ totalEmployees = 0 }) => {
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold">{totalEmployees}</div>
-            <div className="text-purple-200 text-sm">Total Employees</div>
+            <div className="text-purple-200 text-sm">All Time Total</div>
           </div>
         </div>
       </motion.div>

@@ -7,10 +7,11 @@ import {
   Users,
   CheckCircle,
   Award,
+  Layers,
   FileText,
   Clock,
   Bell,
-  Unlock,
+  UserX,
   XCircle,
   Loader,
   UserPlus,
@@ -20,7 +21,7 @@ import StateCardSections from "@/components/employee/Components/StateCardSection
 import { Tabs, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
 import OnboardingTab from "@/components/employee/EmployeeOnboarding/OnboardingTab";
 import EmployeeTab from "@/components/employee/EmployeeOnboarding/EmployeeTab";
-import { fetchEmployeesFromSupabase } from "@/app/api/employeeProfiles";
+import { fetchEmployeesFromSupabase, getProbationMilestone } from "@/app/api/employeeProfiles";
 
 const departments = [
   "All",
@@ -31,15 +32,12 @@ const departments = [
   "Operations",
 ];
 
+// Card order/labels per the "Basic - employee things" doc: the old "Total"
+// card is gone (the true all-time total now lives only in the header
+// banner), and every other card was renamed/recalculated.
 const employmentTypes = [
   {
-    label: "Total",
-    icon: Users,
-    color: "text-blue-600",
-    textColor: "text-blue-900",
-  },
-  {
-    label: "Active",
+    label: "Active Employee",
     icon: CheckCircle,
     color: "text-green-600",
     textColor: "text-green-900",
@@ -51,13 +49,19 @@ const employmentTypes = [
     textColor: "text-purple-900",
   },
   {
+    label: "Semi Permanent",
+    icon: Layers,
+    color: "text-teal-600",
+    textColor: "text-teal-900",
+  },
+  {
     label: "Contract",
     icon: FileText,
     color: "text-orange-600",
     textColor: "text-orange-900",
   },
   {
-    label: "Probation",
+    label: "Probation & Confirmation",
     icon: Clock,
     color: "text-yellow-600",
     textColor: "text-yellow-900",
@@ -69,9 +73,8 @@ const employmentTypes = [
     textColor: "text-red-900",
   },
   {
-    label: "Locked",
-    value: 79,
-    icon: Unlock,
+    label: "Inactive employees",
+    icon: UserX,
     color: "text-indigo-600",
     textColor: "text-indigo-900",
   },
@@ -121,8 +124,11 @@ const EmployeePage = () => {
   const [department, setDepartment] = useState(
     searchParams.get("department") || "All"
   );
+  // Empty string means "no card filter" (show everyone) — none of the
+  // rebuilt cards represent "all employees" any more, so there's no card
+  // value to default to (the true all-time total lives in the header banner).
   const [employmentType, setEmploymentType] = useState(
-    searchParams.get("employmentType") || "Total"
+    searchParams.get("employmentType") || ""
   );
   const [status, setStatus] = useState(searchParams.get("status") || "Total");
   const [directory, setDirectory] = useState(
@@ -171,12 +177,16 @@ const EmployeePage = () => {
     if (department && department !== "All") {
       filtered = filtered.filter((e) => e.department === department);
     }
-    // The stat cards above (Active/Permanent/Contract/Probation/Need Update/Locked)
-    // set this so clicking one actually filters the list, not just highlights the card.
-    if (employmentType && employmentType !== "Total") {
-      if (employmentType === "Active") filtered = filtered.filter((e) => e.status === "active");
-      else if (employmentType === "Locked") filtered = filtered.filter((e) => e.status === "locked");
-      else if (employmentType === "Need Update") filtered = filtered.filter((e) => e.status === "inProgress");
+    // The stat cards above (Active Employee/Permanent/Semi Permanent/Contract/
+    // Probation & Confirmation/Need Update/Inactive employees) set this so
+    // clicking one actually filters the list, not just highlights the card.
+    if (employmentType) {
+      if (employmentType === "Active Employee") filtered = filtered.filter((e) => e.status === "active");
+      else if (employmentType === "Inactive employees") filtered = filtered.filter((e) => e.status === "locked");
+      else if (employmentType === "Need Update")
+        filtered = filtered.filter((e) => e.status === "inProgress" || getProbationMilestone(e));
+      else if (employmentType === "Probation & Confirmation")
+        filtered = filtered.filter((e) => e.employmentType === "Probation");
       else filtered = filtered.filter((e) => e.employmentType === employmentType);
     }
     setTotalPages(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
@@ -188,8 +198,7 @@ const EmployeePage = () => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (department !== "All") params.set("department", department);
-    if (employmentType !== "Total")
-      params.set("employmentType", employmentType);
+    if (employmentType) params.set("employmentType", employmentType);
     if (status !== "Total") params.set("status", status);
     if (directory) params.set("directory", directory);
     params.set("page", String(page));

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import EmployeeDetailsDialog from "./EmployeeDetailsDialog";
 import EditEmployeeDialog from "./EditEmployeeDialog";
-import { setEmployeeLocked } from "@/app/api/employeeProfiles";
+import { setEmployeeLocked, getProbationMilestone } from "@/app/api/employeeProfiles";
 
 export default function EmployeeCard({ employee, departments, refreshEmployees }) {
   const [emp, setEmp] = useState(employee);
@@ -65,6 +65,10 @@ export default function EmployeeCard({ employee, departments, refreshEmployees }
     ? `${Math.max(0, new Date().getFullYear() - new Date(employee.joiningDate).getFullYear())} year(s)`
     : "N/A";
 
+  // Probation & Confirmation card: flag employees who are due (or coming
+  // due) for their probation evaluation/confirmation.
+  const probationMilestone = getProbationMilestone(employee);
+
   return (
     <>
       <motion.div
@@ -114,11 +118,24 @@ export default function EmployeeCard({ employee, departments, refreshEmployees }
               </p>
             </div>
 
-            <Badge
-              className={`${roleInfo.colorClass} ${roleInfo.textColor} text-xs flex items-center gap-1`}
-            >
-              <roleInfo.icon className="w-3 h-3" /> {roleInfo.label}
-            </Badge>
+            <div className="flex flex-wrap gap-1.5">
+              <Badge
+                className={`${roleInfo.colorClass} ${roleInfo.textColor} text-xs flex items-center gap-1`}
+              >
+                <roleInfo.icon className="w-3 h-3" /> {roleInfo.label}
+              </Badge>
+              {probationMilestone && (
+                <Badge
+                  className={`text-xs ${
+                    probationMilestone.badge === "Evaluation Pending"
+                      ? "bg-red-100 text-red-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {probationMilestone.badge}
+                </Badge>
+              )}
+            </div>
 
             <div className="text-xs text-gray-500 space-y-1 mt-2">
               <div className="flex items-center gap-1">

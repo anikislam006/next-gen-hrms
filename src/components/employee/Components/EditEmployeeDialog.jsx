@@ -89,6 +89,8 @@ export default function EditEmployeeDialog({
       role: editFormData.role || "Employee",
       employment_type: editFormData.employmentType || "Probation",
       joining_date: editFormData.joiningDate ? toDateOnly(editFormData.joiningDate) : null,
+      probation_months:
+        editFormData.employmentType === "Probation" ? editFormData.probationMonths || 6 : null,
       status: editFormData.status || "active",
       left_date: editFormData.status === "left" ? toDateOnly(editFormData.leftDate) || null : null,
       present_address: editFormData.presentAddress || null,
@@ -290,6 +292,7 @@ export default function EditEmployeeDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Permanent">Permanent</SelectItem>
+                  <SelectItem value="Semi Permanent">Semi Permanent</SelectItem>
                   <SelectItem value="Contract">Contract</SelectItem>
                   <SelectItem value="Probation">Probation</SelectItem>
                 </SelectContent>
@@ -307,6 +310,34 @@ export default function EditEmployeeDialog({
                 }
               />
             </div>
+
+            {editFormData.employmentType === "Probation" && (
+              <div>
+                <Label className="mb-2 text-gray-500" htmlFor="edit-probation-months">
+                  Probation Months
+                </Label>
+                <Select
+                  value={String(editFormData.probationMonths || 6)}
+                  onValueChange={(value) =>
+                    setEditFormData({ ...editFormData, probationMonths: Number(value) })
+                  }
+                >
+                  <SelectTrigger id="edit-probation-months">
+                    <SelectValue placeholder="Select months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {m} month{m > 1 ? "s" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Counted from the joining date above. Defaults to 6 months if not set.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">

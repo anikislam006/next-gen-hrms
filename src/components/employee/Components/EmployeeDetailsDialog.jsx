@@ -65,7 +65,12 @@ export default function EmployeeDetailsDialog({
                 <Label className="text-gray-500">Employment Type</Label>
                 <p className="mt-2">{employee.employmentType}</p>
               </div>
-         
+              {employee.employmentType === "Probation" && (
+                <div>
+                  <Label className="text-gray-500">Probation Length</Label>
+                  <p className="mt-2">{employee.probationMonths || 6} month(s)</p>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>

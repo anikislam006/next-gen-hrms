@@ -5,6 +5,15 @@
 // out of scope for this pass and must keep working unchanged.
 import { supabase } from "@/utils/supabaseClient";
 
+// Falls back to 6 months when an employee's probation length hasn't been
+// set explicitly (matches the same 6-month assumption Payroll's Festival
+// Bonus calculation already uses for probationers).
+export const DEFAULT_PROBATION_MONTHS = 6;
+
+// How many days before an employee's probation ends the "Need Update" card
+// should start flagging them, per the "at least 15/20 days" business note.
+const PROBATION_NOTICE_WINDOW_DAYS = 20;
+
 // Shapes a Supabase `profiles` row into the field names the existing
 // Employee Management UI components already expect (fullName, employeeId,
 // joiningDate, etc.) so those components didn't need a full rewrite.
@@ -24,6 +33,7 @@ function toLegacyShape(row) {
     status: row.status,
     leftDate: row.left_date,
     joiningDate: row.joining_date,
+    probationMonths: row.probation_months,
     createdAt: row.created_at,
     photoUrl: row.photo_url,
     dateOfBirth: row.date_of_birth,
@@ -42,12 +52,34 @@ function toLegacyShape(row) {
 
 const SELECT_COLUMNS = `
   id, employee_id, full_name, email, phone, role, status, left_date, employment_type,
-  designation, joining_date, photo_url, department_id, created_at,
+  designation, joining_date, probation_months, photo_url, department_id, created_at,
   date_of_birth, gender, marital_status, nationality, blood_group,
   present_address, permanent_address, passport_number, nid_number, tin_number,
   emergency_contact,
   departments:department_id ( name )
 `;
+
+// For an employee on Probation, works out whether they're due for
+// evaluation/confirmation and returns a badge to show, or null if not yet
+// due. Shared by the "Need Update" count and the Probation & Confirmation
+// card's list view so both agree on the same logic.
+export function getProbationMilestone(employee) {
+  if (employee.employmentType !== "Probation" || !employee.joiningDate) return null;
+
+  const months = employee.probationMonths || DEFAULT_PROBATION_MONTHS;
+  const endDate = new Date(employee.joiningDate);
+  endDate.setMonth(endDate.getMonth() + months);
+
+  const daysUntilEnd = Math.round((endDate - new Date()) / (1000 * 60 * 60 * 24));
+
+  if (daysUntilEnd < 0) {
+    return { badge: "Evaluation Pending", endDate, daysUntilEnd };
+  }
+  if (daysUntilEnd <= PROBATION_NOTICE_WINDOW_DAYS) {
+    return { badge: "Confirmation Pending", endDate, daysUntilEnd };
+  }
+  return null;
+}
 
 // Fetches the full employee list plus lifecycle counts. Client-side
 // filter/paginate for now — fine at this headcount; revisit with real
@@ -62,15 +94,31 @@ export async function fetchEmployeesFromSupabase() {
 
   const employees = (data || []).map(toLegacyShape);
 
-  const employmentCounts = { Active: 0, Permanent: 0, Contract: 0, Probation: 0, "Need Update": 0, Locked: 0, Left: 0 };
+  // Card labels match the rebuilt Employee Management dashboard exactly —
+  // see "Basic - employee things" doc.
+  const employmentCounts = {
+    "Active Employee": 0,
+    Permanent: 0,
+    "Semi Permanent": 0,
+    Contract: 0,
+    "Probation & Confirmation": 0,
+    "Need Update": 0,
+    "Inactive employees": 0,
+    Left: 0,
+  };
   for (const e of employees) {
-    if (e.status === "active") employmentCounts.Active += 1;
-    if (e.status === "locked") employmentCounts.Locked += 1;
-    if (e.status === "inProgress") employmentCounts["Need Update"] += 1;
+    if (e.status === "active") employmentCounts["Active Employee"] += 1;
+    if (e.status === "locked") employmentCounts["Inactive employees"] += 1;
     if (e.status === "left") employmentCounts.Left += 1;
     if (e.employmentType === "Permanent") employmentCounts.Permanent += 1;
+    if (e.employmentType === "Semi Permanent") employmentCounts["Semi Permanent"] += 1;
     if (e.employmentType === "Contract") employmentCounts.Contract += 1;
-    if (e.employmentType === "Probation") employmentCounts.Probation += 1;
+    if (e.employmentType === "Probation") employmentCounts["Probation & Confirmation"] += 1;
+    // "Need Update" combines the old inProgress flag with anyone whose
+    // probation confirmation is due or coming up within the notice window.
+    if (e.status === "inProgress" || getProbationMilestone(e)) {
+      employmentCounts["Need Update"] += 1;
+    }
   }
 
   return {
