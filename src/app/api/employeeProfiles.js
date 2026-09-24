@@ -22,6 +22,7 @@ function toLegacyShape(row) {
     role: row.role,
     employmentType: row.employment_type || "Probation",
     status: row.status,
+    leftDate: row.left_date,
     joiningDate: row.joining_date,
     createdAt: row.created_at,
     photoUrl: row.photo_url,
@@ -40,7 +41,7 @@ function toLegacyShape(row) {
 }
 
 const SELECT_COLUMNS = `
-  id, employee_id, full_name, email, phone, role, status, employment_type,
+  id, employee_id, full_name, email, phone, role, status, left_date, employment_type,
   designation, joining_date, photo_url, department_id, created_at,
   date_of_birth, gender, marital_status, nationality, blood_group,
   present_address, permanent_address, passport_number, nid_number, tin_number,
@@ -61,11 +62,12 @@ export async function fetchEmployeesFromSupabase() {
 
   const employees = (data || []).map(toLegacyShape);
 
-  const employmentCounts = { Active: 0, Permanent: 0, Contract: 0, Probation: 0, "Need Update": 0, Locked: 0 };
+  const employmentCounts = { Active: 0, Permanent: 0, Contract: 0, Probation: 0, "Need Update": 0, Locked: 0, Left: 0 };
   for (const e of employees) {
     if (e.status === "active") employmentCounts.Active += 1;
     if (e.status === "locked") employmentCounts.Locked += 1;
     if (e.status === "inProgress") employmentCounts["Need Update"] += 1;
+    if (e.status === "left") employmentCounts.Left += 1;
     if (e.employmentType === "Permanent") employmentCounts.Permanent += 1;
     if (e.employmentType === "Contract") employmentCounts.Contract += 1;
     if (e.employmentType === "Probation") employmentCounts.Probation += 1;
@@ -90,6 +92,8 @@ export async function setEmployeeLocked(profileId, locked) {
 
 // BIZ-EMP-01/05/06: updates a profile and, when designation or joining date
 // actually changed, logs a dated history entry with the mandatory remark.
+// Also handles the leaver flow (status -> "left" + left_date) for the
+// Monthly Left-Employee and Turnover reports.
 export async function updateEmployeeProfile({ profileId, updates, previous, remark }) {
   const {
     data: { user },
@@ -116,6 +120,16 @@ export async function updateEmployeeProfile({ profileId, updates, previous, rema
       old_value: previous.joining_date || null,
       new_value: updates.joining_date || null,
       remark,
+      changed_by: user?.id || null,
+    });
+  }
+  if (updates.status === "left" && previous.status !== "left") {
+    historyRows.push({
+      profile_id: profileId,
+      change_type: "status",
+      old_value: previous.status || null,
+      new_value: `left (${updates.left_date || "date not set"})`,
+      remark: remark || "Marked as left",
       changed_by: user?.id || null,
     });
   }

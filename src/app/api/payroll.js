@@ -193,6 +193,12 @@ export const fetchSettingSalaries = async (page = 1) => {
 // Looks the employee up by email (that's the key the UI has on hand) and
 // upserts their salary_settings row. Throws on failure so the caller
 // (usePayroll's handleCreateSalarySetting) reports success/failure correctly.
+//
+// BIZ-EMP-01 / Salary Increment & Previous Salary reports: whenever an
+// existing salary row's basic/gross actually changes, we also write a row to
+// employee_history (change_type = 'salary') so the change is auditable and
+// reportable later. A brand-new salary setting (no prior row) is not logged
+// as a "change" — there is nothing to compare it against yet.
 export const createSettingSalary = async (salaryData) => {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -201,6 +207,15 @@ export const createSettingSalary = async (salaryData) => {
     .maybeSingle();
   if (profileError) throw profileError;
   if (!profile) throw new Error(`No employee found for email ${salaryData.email}`);
+
+  // Look up the existing row (if any) BEFORE we overwrite it, so we can
+  // compare old vs new for history logging.
+  const { data: previous, error: previousError } = await supabase
+    .from("salary_settings")
+    .select("*")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+  if (previousError) throw previousError;
 
   const payload = {
     profile_id: profile.id,
@@ -224,6 +239,43 @@ export const createSettingSalary = async (salaryData) => {
     .select()
     .single();
   if (error) throw error;
+
+  const grossOf = (row) =>
+    Number(row.basic_salary || 0) +
+    Number(row.house_rent || 0) +
+    Number(row.medical_allowance || 0) +
+    Number(row.transport_allowance || 0) +
+    Number(row.mobile_allowance || 0) +
+    Number(row.other_allowances || 0);
+
+  if (previous) {
+    const oldGross = grossOf(previous);
+    const newGross = grossOf(payload);
+    const basicChanged = Number(previous.basic_salary || 0) !== payload.basic_salary;
+    const grossChanged = oldGross !== newGross;
+
+    if (basicChanged || grossChanged) {
+      // Matches the pattern in api/employeeProfiles.js's updateEmployeeProfile:
+      // read the signed-in Supabase Auth user rather than relying on the
+      // client passing an id in.
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      const { error: historyError } = await supabase.from("employee_history").insert({
+        profile_id: profile.id,
+        change_type: "salary",
+        old_value: `Basic: ${Number(previous.basic_salary || 0)}, Gross: ${oldGross}`,
+        new_value: `Basic: ${payload.basic_salary}, Gross: ${newGross}`,
+        remark: salaryData.remark || "Salary updated via Payroll module",
+        changed_by: authUser?.id || null,
+      });
+      // Don't fail the whole salary save if history logging has a hiccup —
+      // the salary itself is already saved correctly at this point.
+      if (historyError) console.error("employee_history insert error:", historyError);
+    }
+  }
+
   return { success: true, data };
 };
 

@@ -57,7 +57,9 @@ export default function EditEmployeeDialog({
     (editFormData.designation || "") !== (originalEmployee?.designation || "");
   const joiningDateChanged =
     toDateOnly(editFormData.joiningDate) !== toDateOnly(originalEmployee?.joiningDate);
-  const remarkRequired = designationChanged || joiningDateChanged;
+  const markingAsLeft =
+    editFormData.status === "left" && (originalEmployee?.status || "") !== "left";
+  const remarkRequired = designationChanged || joiningDateChanged || markingAsLeft;
 
   const onSave = async () => {
     if (!editFormData._id) {
@@ -72,6 +74,11 @@ export default function EditEmployeeDialog({
       return;
     }
 
+    if (markingAsLeft && !editFormData.leftDate) {
+      toast.error("Please set the leaving date before marking this employee as Left.");
+      return;
+    }
+
     const selectedDept = departments?.find((d) => d.name === editFormData.department);
 
     const updates = {
@@ -83,6 +90,7 @@ export default function EditEmployeeDialog({
       employment_type: editFormData.employmentType || "Probation",
       joining_date: editFormData.joiningDate ? toDateOnly(editFormData.joiningDate) : null,
       status: editFormData.status || "active",
+      left_date: editFormData.status === "left" ? toDateOnly(editFormData.leftDate) || null : null,
       present_address: editFormData.presentAddress || null,
       permanent_address: editFormData.permanentAddress || null,
       date_of_birth: editFormData.dateOfBirth ? toDateOnly(editFormData.dateOfBirth) : null,
@@ -92,6 +100,7 @@ export default function EditEmployeeDialog({
     const previous = {
       designation: originalEmployee?.designation || "",
       joining_date: originalEmployee?.joiningDate ? toDateOnly(originalEmployee.joiningDate) : null,
+      status: originalEmployee?.status || "",
     };
 
     try {
@@ -178,9 +187,28 @@ export default function EditEmployeeDialog({
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inProgress">Needs Update</SelectItem>
                   <SelectItem value="locked">Locked</SelectItem>
+                  <SelectItem value="left">Left the company</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {editFormData.status === "left" && (
+              <div>
+                <Label className="mb-2 text-gray-500" htmlFor="edit-left-date">
+                  Leaving Date <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="edit-left-date"
+                  type="date"
+                  value={toDateOnly(editFormData.leftDate)}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, leftDate: e.target.value })
+                  }
+                />
+                <p className="text-xs text-amber-600 mt-1">
+                  Used for the Monthly Left-Employee and Turnover reports.
+                </p>
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -289,7 +317,7 @@ export default function EditEmployeeDialog({
               id="edit-remark"
               placeholder={
                 remarkRequired
-                  ? "Required: explain the reason for this designation/joining date change"
+                  ? "Required: explain the reason for this designation/joining date/status change"
                   : "Optional note about this update"
               }
               value={remark}
@@ -297,8 +325,8 @@ export default function EditEmployeeDialog({
             />
             {remarkRequired && (
               <p className="text-xs text-amber-600 mt-1">
-                A remark is required when changing designation or joining date — it's saved to this
-                employee's history.
+                A remark is required when changing designation, joining date, or marking someone as
+                left — it's saved to this employee's history.
               </p>
             )}
           </div>
