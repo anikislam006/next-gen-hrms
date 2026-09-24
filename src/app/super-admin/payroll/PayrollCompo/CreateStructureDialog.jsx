@@ -37,6 +37,16 @@ const CreateStructureDialog = () => {
     basic_min: "",
     basic_max: "",
     epf_applicable: true,
+    // BIZ-PAY-01: default allowance amounts for this grade/level band —
+    // "Basic Salary + House Rent + Medical Allowance + Conveyance = Gross
+    // Salary", per the business's salary-structure formula. Optional; an
+    // employee's individual salary can still be set/edited component by
+    // component regardless of these defaults.
+    default_house_rent: "",
+    default_medical_allowance: "",
+    default_transport_allowance: "",
+    default_mobile_allowance: "",
+    default_other_allowances: "",
   });
 
   // Handle Submission with API call
@@ -60,6 +70,11 @@ const CreateStructureDialog = () => {
           basic_min: "",
           basic_max: "",
           epf_applicable: true,
+          default_house_rent: "",
+          default_medical_allowance: "",
+          default_transport_allowance: "",
+          default_mobile_allowance: "",
+          default_other_allowances: "",
         });
       } else {
         alert(result.message || "Failed to create structure");
@@ -171,6 +186,72 @@ const CreateStructureDialog = () => {
                 placeholder="35000"
                 required
               />
+            </div>
+          </div>
+
+          {/* Default allowances (BIZ-PAY-01): Basic Salary + House Rent +
+              Medical Allowance + Conveyance = Gross Salary, per the
+              business's formula. These pre-fill an employee's individual
+              salary when this grade is applied — still editable per person. */}
+          <div className="space-y-2">
+            <Label>Default Allowances for this Grade (optional)</Label>
+            <p className="text-xs text-gray-500">
+              Pre-fills these amounts when this structure is applied to an employee's salary — each
+              employee's figures stay individually editable afterward.
+            </p>
+            <div className="grid grid-cols-2 gap-4 pt-1">
+              <div className="space-y-1">
+                <Label htmlFor="default_house_rent" className="text-xs text-gray-600">House Rent</Label>
+                <Input
+                  id="default_house_rent"
+                  type="number"
+                  value={structureForm.default_house_rent}
+                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_house_rent: e.target.value }))}
+                  placeholder="e.g., 8000"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="default_medical_allowance" className="text-xs text-gray-600">Medical Allowance</Label>
+                <Input
+                  id="default_medical_allowance"
+                  type="number"
+                  value={structureForm.default_medical_allowance}
+                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_medical_allowance: e.target.value }))}
+                  placeholder="e.g., 2000"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="default_transport_allowance" className="text-xs text-gray-600">
+                  Transport Allowance (Conveyance)
+                </Label>
+                <Input
+                  id="default_transport_allowance"
+                  type="number"
+                  value={structureForm.default_transport_allowance}
+                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_transport_allowance: e.target.value }))}
+                  placeholder="e.g., 1500"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="default_mobile_allowance" className="text-xs text-gray-600">Mobile Allowance</Label>
+                <Input
+                  id="default_mobile_allowance"
+                  type="number"
+                  value={structureForm.default_mobile_allowance}
+                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_mobile_allowance: e.target.value }))}
+                  placeholder="e.g., 500"
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label htmlFor="default_other_allowances" className="text-xs text-gray-600">Other Allowances</Label>
+                <Input
+                  id="default_other_allowances"
+                  type="number"
+                  value={structureForm.default_other_allowances}
+                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_other_allowances: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
             </div>
           </div>
 

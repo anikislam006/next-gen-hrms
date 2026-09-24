@@ -97,6 +97,10 @@ export default function EditEmployeeDialog({
       permanent_address: editFormData.permanentAddress || null,
       date_of_birth: editFormData.dateOfBirth ? toDateOnly(editFormData.dateOfBirth) : null,
       gender: editFormData.gender || null,
+      // BIZ-PAY-02: bank details, needed for the bank-transfer disbursement export.
+      bank_name: editFormData.bankName || null,
+      bank_account_number: editFormData.bankAccountNumber || null,
+      bank_branch: editFormData.bankBranch || null,
     };
 
     const previous = {
@@ -391,6 +395,47 @@ export default function EditEmployeeDialog({
                   })
                 }
               />
+            </div>
+          </div>
+
+          {/* BIZ-PAY-02: bank details, needed for the bank-transfer disbursement export */}
+          <div className="pt-2 border-t">
+            <p className="text-sm font-medium text-gray-700 mt-4 mb-2">Bank Details</p>
+            <p className="text-xs text-gray-500 mb-3">
+              Used to build the bank-transfer file when payroll is disbursed.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label className="mb-2 text-gray-500" htmlFor="edit-bank-name">Bank Name</Label>
+                <Input
+                  id="edit-bank-name"
+                  value={editFormData.bankName || ""}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, bankName: e.target.value })
+                  }
+                  placeholder="e.g., BRAC Bank"
+                />
+              </div>
+              <div>
+                <Label className="mb-2 text-gray-500" htmlFor="edit-bank-account">Account Number</Label>
+                <Input
+                  id="edit-bank-account"
+                  value={editFormData.bankAccountNumber || ""}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, bankAccountNumber: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label className="mb-2 text-gray-500" htmlFor="edit-bank-branch">Branch</Label>
+                <Input
+                  id="edit-bank-branch"
+                  value={editFormData.bankBranch || ""}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, bankBranch: e.target.value })
+                  }
+                />
+              </div>
             </div>
           </div>
         </TabsContent>

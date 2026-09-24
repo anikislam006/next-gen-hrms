@@ -212,7 +212,8 @@ const loadProcessedRecords = useCallback(async (params = {}) => {
       limit: params.limit || 10,
       email: params.email || "",
       status: params.status || "",
-      date: params.date || ""
+      date: params.date || "",
+      department: params.department || "All"
     });
 
     if (result.success) {

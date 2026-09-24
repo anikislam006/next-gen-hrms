@@ -31,6 +31,14 @@ export const fetchPayrollStructures = async (page = 1, search = "") => {
         basic_max: s.basic_max,
         epf_applicable: s.epf_applicable,
         status: s.status,
+        // BIZ-PAY-01: default allowances for this grade/level band, so
+        // assigning a grade to an employee can pre-fill their individual
+        // salary components instead of HR retyping every figure.
+        default_house_rent: Number(s.default_house_rent || 0),
+        default_medical_allowance: Number(s.default_medical_allowance || 0),
+        default_transport_allowance: Number(s.default_transport_allowance || 0),
+        default_mobile_allowance: Number(s.default_mobile_allowance || 0),
+        default_other_allowances: Number(s.default_other_allowances || 0),
       })),
       pagination: {
         totalItems: count || 0,
@@ -53,6 +61,11 @@ export const createPayrollStructure = async (structureData) => {
       basic_min: Number(structureData.basic_min) || 0,
       basic_max: Number(structureData.basic_max) || 0,
       epf_applicable: structureData.epf_applicable !== false,
+      default_house_rent: Number(structureData.default_house_rent) || 0,
+      default_medical_allowance: Number(structureData.default_medical_allowance) || 0,
+      default_transport_allowance: Number(structureData.default_transport_allowance) || 0,
+      default_mobile_allowance: Number(structureData.default_mobile_allowance) || 0,
+      default_other_allowances: Number(structureData.default_other_allowances) || 0,
     };
     const { data, error } = await supabase.from("payroll_structures").insert(payload).select().single();
     if (error) throw error;
@@ -228,6 +241,14 @@ export const createSettingSalary = async (salaryData) => {
     mobile_allowance: Number(salaryData.mobileAllowance) || 0,
     other_allowances: Number(salaryData.otherAllowances) || 0,
     advance_installment: Number(salaryData.advance_installment) || 0,
+    // BIZ-PAY-01: the rest of the component set the business asked for —
+    // previously present as unused database columns, now real, editable,
+    // and factored into the net-salary calculation below.
+    arrear: Number(salaryData.arrear) || 0,
+    ta: Number(salaryData.ta) || 0,
+    da: Number(salaryData.da) || 0,
+    loan_deduction: Number(salaryData.loan_deduction) || 0,
+    other_deduction: Number(salaryData.other_deduction) || 0,
     epf_applicable: !!salaryData.epf_applicable,
     tax_applicable: !!salaryData.tax_applicable,
     status: salaryData.status || "active",
@@ -311,6 +332,11 @@ export const fetchSettingByEmail = async (email) => {
         mobileAllowance: data.mobile_allowance,
         otherAllowances: data.other_allowances,
         advance_installment: data.advance_installment,
+        arrear: data.arrear,
+        ta: data.ta,
+        da: data.da,
+        loan_deduction: data.loan_deduction,
+        other_deduction: data.other_deduction,
         epf_applicable: data.epf_applicable,
         tax_applicable: data.tax_applicable,
         status: data.status,
@@ -484,12 +510,16 @@ function toPayrollRecordShape(row) {
     otherDeductions: Number(b.otherDeductions || 0),
     netSalary: Number(row.net_salary || 0),
     approvedAt: row.approved_at,
+    // BIZ-PAY-05: department-wise preparation and approval — who/when signed
+    // off at the department level, ahead of the CEO's final approval.
+    deptApprovedAt: row.dept_approved_at,
+    deptApprovedBy: row.dept_approved_by,
   };
 }
 
 const PAYROLL_RECORD_SELECT = `
   id, profile_id, payroll_period, gross_salary, deductions, epf_amount, tax_amount, bonus_amount,
-  net_salary, status, breakdown, approved_at, created_at,
+  net_salary, status, breakdown, approved_at, dept_approved_at, dept_approved_by, created_at,
   profiles:profile_id ( full_name, email, designation, department_id, departments:department_id ( name ) )
 `;
 
@@ -499,6 +529,7 @@ export const fetchProcessedPayrollRecords = async ({
   email = "",
   status = "",
   date = "",
+  department = "All",
 } = {}) => {
   try {
     const from = (page - 1) * limit;
@@ -519,6 +550,11 @@ export const fetchProcessedPayrollRecords = async ({
       rows = rows.filter(
         (r) => r.email?.toLowerCase().includes(term) || r.fullName?.toLowerCase().includes(term)
       );
+    }
+    // Department is a joined display name, filtered client-side like the
+    // rest of the app does at this headcount (see api/employees.js).
+    if (department && department !== "All") {
+      rows = rows.filter((r) => r.department === department);
     }
 
     return {

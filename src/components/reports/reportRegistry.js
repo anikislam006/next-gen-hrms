@@ -112,4 +112,10 @@ export const FINANCIAL_REPORTS = [
     filters: "year",
     run: ({ year }) => reportsApi.getPreviousBonusReport({ year }),
   },
+  {
+    key: "bank-transfer",
+    label: "Bank Transfer Report",
+    filters: "month",
+    run: ({ month, year }) => reportsApi.getBankTransferReport({ month, year }),
+  },
 ];

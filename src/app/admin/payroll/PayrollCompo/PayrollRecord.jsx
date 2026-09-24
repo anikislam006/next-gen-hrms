@@ -2,10 +2,11 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Search, ChevronLeft, ChevronRight, Loader2, Trash2,
-  History, Download, Filter,
+  History, Download,
 } from "lucide-react";
 import { usePayroll } from "@/app/hook/usePayroll";
 import { useAuth } from "@/context/AuthContext";
+import { useMyTeam } from "@/app/hook/useMyTeam";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { exportRowsToCsv } from "@/components/reports/csvExport";
 
 const PayrollRecord = () => {
   const {
@@ -25,15 +27,21 @@ const PayrollRecord = () => {
     handleUpdatePayrollStatus,
   } = usePayroll();
   const { user } = useAuth();
+  const { departments } = useMyTeam();
   // BIZ-PAY-04: only a SuperAdmin login (the CEO account) can sign payroll off
   // as Approved — an Admin viewing this page can never approve. The database
   // enforces this too, this just avoids offering an option that gets rejected.
   const canApprove = user?.role === "SuperAdmin";
+  // BIZ-PAY-05: department-wise preparation and approval — an Admin
+  // (department/HR manager) or the SuperAdmin can give the department-level
+  // sign-off that has to happen before the CEO's final approval above.
+  const canDeptApprove = user?.role === "SuperAdmin" || user?.role === "Admin";
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("All");
 
   // 1. Fetch data when filters or page change
   const fetchFilteredData = useCallback(
@@ -44,10 +52,30 @@ const PayrollRecord = () => {
         email: searchTerm,
         status: statusFilter === "all" ? "" : statusFilter,
         date: dateFilter,
+        department: departmentFilter,
       });
     },
-    [searchTerm, statusFilter, dateFilter, loadProcessedRecords]
+    [searchTerm, statusFilter, dateFilter, departmentFilter, loadProcessedRecords]
   );
+
+  const handleExportCsv = () => {
+    if (!processedRecords.length) {
+      toast.error("Nothing to export on this page yet.");
+      return;
+    }
+    exportRowsToCsv(
+      "payroll-records",
+      [
+        { key: "fullName", label: "Name" },
+        { key: "department", label: "Department" },
+        { key: "period", label: "Period" },
+        { key: "grossSalary", label: "Gross Salary" },
+        { key: "netSalary", label: "Net Salary" },
+        { key: "status", label: "Status" },
+      ],
+      processedRecords.map((r) => ({ ...r, period: formatPeriod(r.config?.payrollPeriod) }))
+    );
+  };
 
   // 2. Initial Load & Debounced Search
   useEffect(() => {
@@ -99,17 +127,33 @@ const PayrollRecord = () => {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="Processed">Processed</SelectItem>
+                <SelectItem value="Dept Approved">Dept Approved</SelectItem>
                 <SelectItem value="Approved">Approved</SelectItem>
                 <SelectItem value="Paid">Paid</SelectItem>
               </SelectContent>
             </Select>
 
-            <Button variant="outline" className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
+            {/* BIZ-PAY-05: department-wise payroll preparation — filter the
+                history down to one department at a time */}
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Departments</SelectItem>
+                {(departments || []).map((dept) => (
+                  <SelectItem key={dept._id || dept.name} value={dept.name}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <Button variant="outline" className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={handleExportCsv}
+            >
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -156,8 +200,22 @@ const PayrollRecord = () => {
                     className="text-xs font-bold border-none bg-transparent cursor-pointer focus:ring-0 outline-none text-slate-500"
                   >
                     <option value="Processed">Processed</option>
-                    <option value="Approved" disabled={!canApprove}>
-                      Approved{!canApprove ? " (SuperAdmin only)" : ""}
+                    <option
+                      value="Dept Approved"
+                      disabled={!canDeptApprove || record.status === "Approved" || record.status === "Paid"}
+                    >
+                      Dept Approved{!canDeptApprove ? " (Admin/SuperAdmin only)" : ""}
+                    </option>
+                    <option
+                      value="Approved"
+                      disabled={!canApprove || record.status !== "Dept Approved"}
+                    >
+                      Approved
+                      {!canApprove
+                        ? " (SuperAdmin only)"
+                        : record.status !== "Dept Approved" && record.status !== "Approved"
+                        ? " (needs dept approval first)"
+                        : ""}
                     </option>
                     <option value="Paid" disabled={record.status !== "Approved" && record.status !== "Paid"}>
                       Paid{record.status !== "Approved" && record.status !== "Paid" ? " (needs approval first)" : ""}

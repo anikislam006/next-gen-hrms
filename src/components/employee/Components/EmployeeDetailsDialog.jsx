@@ -169,7 +169,14 @@ export default function EmployeeDetailsDialog({
                 <Label className="text-gray-500">Tin Number</Label>
                 <p className="mt-2">{employee.tinNumber}</p>
               </div>
-            
+              <div>
+                <Label className="text-gray-500">Bank Details</Label>
+                <p className="mt-2">
+                  {employee.bankName || "N/A"}
+                  {employee.bankAccountNumber ? ` — ${employee.bankAccountNumber}` : ""}
+                </p>
+                {employee.bankBranch && <p className="text-sm text-gray-500">{employee.bankBranch} branch</p>}
+              </div>
             </div>
           </div>
         </TabsContent>

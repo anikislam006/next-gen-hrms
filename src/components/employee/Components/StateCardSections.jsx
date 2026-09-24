@@ -41,9 +41,13 @@ const StateCardSections = ({employmentTypes, employmentType, employmentCounts, t
             >
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1 min-w-0">
+                    {/* Fixed min-height reserves room for a 2-line label (e.g.
+                        "Probation & Confirmation") so every card's number
+                        sits at the same vertical position, whether its own
+                        label wraps to one line or two. */}
                     <p
-                      className={`text-sm font-medium ${
+                      className={`text-sm font-medium min-h-[2.5rem] leading-tight flex items-end ${
                         isActive ? "text-blue-700" : "text-gray-600"
                       }`}
                     >
@@ -58,7 +62,7 @@ const StateCardSections = ({employmentTypes, employmentType, employmentCounts, t
                     </p>
                   </div>
                   <Icon
-                    className={`w-8 h-8 ${
+                    className={`w-8 h-8 shrink-0 ${
                       isActive ? "text-blue-600" : item.color
                     }`}
                   />

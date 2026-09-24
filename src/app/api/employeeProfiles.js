@@ -47,6 +47,10 @@ function toLegacyShape(row) {
     nidNumber: row.nid_number,
     tinNumber: row.tin_number,
     emergencyContact: row.emergency_contact || { name: "", phone: "", relation: "" },
+    // BIZ-PAY-02: bank details, needed for the bank-transfer disbursement export.
+    bankName: row.bank_name,
+    bankAccountNumber: row.bank_account_number,
+    bankBranch: row.bank_branch,
   };
 }
 
@@ -55,7 +59,7 @@ const SELECT_COLUMNS = `
   designation, joining_date, probation_months, photo_url, department_id, created_at,
   date_of_birth, gender, marital_status, nationality, blood_group,
   present_address, permanent_address, passport_number, nid_number, tin_number,
-  emergency_contact,
+  emergency_contact, bank_name, bank_account_number, bank_branch,
   departments:department_id ( name )
 `;
 

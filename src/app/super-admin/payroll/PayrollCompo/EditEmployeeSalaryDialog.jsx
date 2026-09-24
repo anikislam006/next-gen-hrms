@@ -23,8 +23,8 @@ import { usePayroll } from "@/app/hook/usePayroll";
 import { toast } from "sonner";
 
 const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmployee, onSuccess }) => {
-  const { handleCreateSalarySetting, getSalaryByEmail } = usePayroll();
-  
+  const { handleCreateSalarySetting, getSalaryByEmail, structures } = usePayroll();
+
   const [isFetching, setIsFetching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [displayedGross, setDisplayedGross] = useState(0);
@@ -38,6 +38,13 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
     mobile_allowance: "0",
     other_allowances: "0",
     advance_installment: "0",
+    // BIZ-PAY-01: Arrear, TA, DA, Loan Deduction and Other Deduction — the
+    // rest of the business's component list, previously unused DB columns.
+    arrear: "0",
+    ta: "0",
+    da: "0",
+    loan_deduction: "0",
+    other_deduction: "0",
     epf_applicable: false,
     tax_applicable: false,
     status: "active",
@@ -65,6 +72,11 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             mobile_allowance: dbData.mobileAllowance?.toString() || "0",
             other_allowances: dbData.otherAllowances?.toString() || "0",
             advance_installment: dbData.advance_installment?.toString() || "0",
+            arrear: dbData.arrear?.toString() || "0",
+            ta: dbData.ta?.toString() || "0",
+            da: dbData.da?.toString() || "0",
+            loan_deduction: dbData.loan_deduction?.toString() || "0",
+            other_deduction: dbData.other_deduction?.toString() || "0",
             epf_applicable: !!dbData.epf_applicable,
             tax_applicable: !!dbData.tax_applicable,
             status: dbData.status || "active",
@@ -83,6 +95,11 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             mobile_allowance: "0",
             other_allowances: "0",
             advance_installment: "0",
+            arrear: "0",
+            ta: "0",
+            da: "0",
+            loan_deduction: "0",
+            other_deduction: "0",
             epf_applicable: true,
             tax_applicable: true,
             status: selectedEmployee.status || "active",
@@ -118,6 +135,24 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
 
   const currentGross = calculateGross();
 
+  // BIZ-PAY-01: applying a grade's defaults pre-fills the allowance fields
+  // from the structure band instead of HR retyping every figure — still
+  // fully editable afterward, this is a starting point, not a lock.
+  const applyStructureDefaults = (structureId) => {
+    const structure = structures.find((s) => s._id === structureId);
+    if (!structure) return;
+    setSalaryForm((prev) => ({
+      ...prev,
+      salary_grade: structure.grade,
+      house_rent: String(structure.default_house_rent || 0),
+      medical_allowance: String(structure.default_medical_allowance || 0),
+      transport_allowance: String(structure.default_transport_allowance || 0),
+      mobile_allowance: String(structure.default_mobile_allowance || 0),
+      other_allowances: String(structure.default_other_allowances || 0),
+      epf_applicable: !!structure.epf_applicable,
+    }));
+  };
+
   const handleUpdateSalary = async () => {
     setIsSubmitting(true);
     const submissionData = {
@@ -132,10 +167,15 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
       mobileAllowance: salaryForm.mobile_allowance,
       otherAllowances: salaryForm.other_allowances,
       advance_installment: salaryForm.advance_installment,
+      arrear: salaryForm.arrear,
+      ta: salaryForm.ta,
+      da: salaryForm.da,
+      loan_deduction: salaryForm.loan_deduction,
+      other_deduction: salaryForm.other_deduction,
       epf_applicable: salaryForm.epf_applicable,
       tax_applicable: salaryForm.tax_applicable,
       status: salaryForm.status,
-      level: 1 
+      level: 1
     };
 
     try {
@@ -193,14 +233,34 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
           </div>
 
           {/* Salary Grade */}
-          <div>
-            <Label htmlFor="edit_salary_grade">Salary Grade</Label>
-            <Input
-              id="edit_salary_grade"
-              value={salaryForm.salary_grade}
-              onChange={(e) => setSalaryForm(prev => ({ ...prev, salary_grade: e.target.value }))}
-              placeholder="e.g., A1, B2, C1"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div>
+              <Label htmlFor="edit_salary_grade">Salary Grade</Label>
+              <Input
+                id="edit_salary_grade"
+                value={salaryForm.salary_grade}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, salary_grade: e.target.value }))}
+                placeholder="e.g., A1, B2, C1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_apply_structure">Apply a structure's defaults</Label>
+              <Select onValueChange={applyStructureDefaults}>
+                <SelectTrigger id="edit_apply_structure">
+                  <SelectValue placeholder="Choose a salary structure..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(structures || []).map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.title} (Grade {s.grade}{s.level ? `-${s.level}` : ""})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                Fills House Rent/Medical/Transport/Mobile/Other from that grade's band — still editable after.
+              </p>
+            </div>
           </div>
 
           {/* Basic Salary & House Rent */}
@@ -258,7 +318,7 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
               />
             </div>
             <div>
-              <Label htmlFor="edit_transport">Transport Allowance</Label>
+              <Label htmlFor="edit_transport">Transport Allowance (Conveyance)</Label>
               <Input
                 id="edit_transport"
                 type="number"
@@ -292,18 +352,81 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             </div>
           </div>
 
+          {/* Arrear / TA / DA — additional standing components (BIZ-PAY-01) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="edit_arrear">Arrear</Label>
+              <Input
+                id="edit_arrear"
+                type="number"
+                min="0"
+                value={salaryForm.arrear}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, arrear: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_ta">TA (Travel Allowance)</Label>
+              <Input
+                id="edit_ta"
+                type="number"
+                min="0"
+                value={salaryForm.ta}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, ta: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_da">DA (Dearness Allowance)</Label>
+              <Input
+                id="edit_da"
+                type="number"
+                min="0"
+                value={salaryForm.da}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, da: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+          </div>
+
           {/* Deductions */}
-          <div>
-            <Label htmlFor="edit_advance">Advance Installment</Label>
-            <Input
-              id="edit_advance"
-              type="number"
-              min="0"
-              value={salaryForm.advance_installment}
-              onChange={(e) => setSalaryForm(prev => ({ ...prev, advance_installment: e.target.value }))}
-              placeholder="0"
-            />
-            <p className="text-xs text-gray-500 mt-1">Monthly advance deduction amount</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="edit_advance">Advance Installment</Label>
+              <Input
+                id="edit_advance"
+                type="number"
+                min="0"
+                value={salaryForm.advance_installment}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, advance_installment: e.target.value }))}
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-1">Monthly advance deduction</p>
+            </div>
+            <div>
+              <Label htmlFor="edit_loan">Loan Deduction</Label>
+              <Input
+                id="edit_loan"
+                type="number"
+                min="0"
+                value={salaryForm.loan_deduction}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, loan_deduction: e.target.value }))}
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-1">Monthly loan repayment deduction</p>
+            </div>
+            <div>
+              <Label htmlFor="edit_other_deduction">Other Deduction</Label>
+              <Input
+                id="edit_other_deduction"
+                type="number"
+                min="0"
+                value={salaryForm.other_deduction}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, other_deduction: e.target.value }))}
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-1">Any other monthly deduction</p>
+            </div>
           </div>
 
           {/* Applicability */}

@@ -754,3 +754,62 @@ export async function getPreviousBonusReport({ year } = {}) {
     rows,
   };
 }
+
+// 18. Bank transfer report (BIZ-PAY-02) — the file the bank needs to move
+// everyone's net salary: one row per employee for the chosen month, with the
+// bank details on their profile. Only "Approved" or "Paid" records are
+// included, since a bank transfer should never be prepared off unapproved
+// figures; rows missing bank details are still listed (so the gap is visible)
+// but flagged in a "Bank Details" column instead of silently left out.
+const PAYROLL_WITH_BANK_DETAILS = `
+  id, payroll_period, net_salary, status,
+  profiles:profile_id (
+    id, employee_id, full_name, department_id,
+    departments:department_id ( name ),
+    bank_name, bank_account_number, bank_branch
+  )
+`;
+
+export async function getBankTransferReport({ month, year } = {}) {
+  const period = periodString(month, year);
+  const { data, error } = await supabase
+    .from("payroll_records")
+    .select(PAYROLL_WITH_BANK_DETAILS)
+    .eq("payroll_period", period)
+    .in("status", ["Approved", "Paid"])
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const rows = (data || []).map((r) => {
+    const p = r.profiles;
+    const hasBankDetails = !!(p?.bank_name && p?.bank_account_number);
+    return {
+      employeeId: employeeIdOf(p),
+      fullName: p?.full_name || "",
+      department: deptName(p),
+      bankName: p?.bank_name || "",
+      accountNumber: p?.bank_account_number || "",
+      branch: p?.bank_branch || "",
+      netSalary: Number(r.net_salary || 0),
+      status: r.status,
+      bankDetailsStatus: hasBankDetails ? "OK" : "Missing — cannot transfer",
+    };
+  });
+
+  return {
+    success: true,
+    columns: [
+      { key: "employeeId", label: "Employee ID" },
+      { key: "fullName", label: "Name" },
+      { key: "department", label: "Department" },
+      { key: "bankName", label: "Bank Name" },
+      { key: "accountNumber", label: "Account Number" },
+      { key: "branch", label: "Branch" },
+      { key: "netSalary", label: "Net Salary (Transfer Amount)" },
+      { key: "status", label: "Payroll Status" },
+      { key: "bankDetailsStatus", label: "Bank Details" },
+    ],
+    rows,
+    period,
+  };
+}
