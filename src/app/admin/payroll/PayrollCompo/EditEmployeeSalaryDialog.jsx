@@ -22,6 +22,38 @@ import { X, Save, Loader2 } from "lucide-react";
 import { usePayroll } from "@/app/hook/usePayroll";
 import { toast } from "sonner";
 
+// BIZ-PAY-01, confirmed with Anik (2026-09-24): "Basic Salary + House Rent +
+// Medical Allowance + Conveyance = Gross Salary", split Basic 60% / House
+// Rent 30% / Medical 5% / Conveyance 5% of GROSS (matches the salary
+// calculator he shared: DEFAULT_SALARY_CALCULATION_CONFIG). Mobile Allowance
+// and Other Allowance are explicitly ADDITIONAL components on top of Gross,
+// not part of the 60/30/5/5 split — they're set freely, not derived.
+const SALARY_SPLIT = {
+  basicPercent: 60,
+  houseRentPercent: 30,
+  medicalPercent: 5,
+  conveyancePercent: 5,
+};
+
+function componentsFromGross(gross) {
+  const g = Math.max(0, Number(gross) || 0);
+  return {
+    basic: Math.round(g * (SALARY_SPLIT.basicPercent / 100)),
+    houseRent: Math.round(g * (SALARY_SPLIT.houseRentPercent / 100)),
+    medical: Math.round(g * (SALARY_SPLIT.medicalPercent / 100)),
+    transport: Math.round(g * (SALARY_SPLIT.conveyancePercent / 100)),
+  };
+}
+
+// Basic is usually the number HR actually knows (an offer letter figure), so
+// typing it derives Gross backward, then the rest forward from that Gross —
+// same formula, just entered from the other end.
+function componentsFromBasic(basic) {
+  const b = Math.max(0, Number(basic) || 0);
+  const gross = SALARY_SPLIT.basicPercent > 0 ? b / (SALARY_SPLIT.basicPercent / 100) : 0;
+  return { gross: Math.round(gross), ...componentsFromGross(gross) };
+}
+
 const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmployee, onSuccess }) => {
   const { handleCreateSalarySetting, getSalaryByEmail, structures } = usePayroll();
 
@@ -45,6 +77,15 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
     da: "0",
     loan_deduction: "0",
     other_deduction: "0",
+    // Loan Duration (Anik's request): the Loan Deduction above only applies
+    // automatically for this many payroll periods starting at the start
+    // period below, then stops on its own. Blank = applies indefinitely.
+    loan_start_period: "",
+    loan_duration_months: "",
+    // Provident Fund (PF) — renamed/consolidated from the old separate,
+    // confusing "EPF"-vs-"PF" fields. Auto = 10% of Basic; this override
+    // field lets HR set a specific figure instead when needed.
+    provident_fund: "0",
     epf_applicable: false,
     tax_applicable: false,
     status: "active",
@@ -58,7 +99,7 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
       setIsFetching(true);
       try {
         const response = await getSalaryByEmail(selectedEmployee.email);
-        
+
         if (response && response.success && response.data) {
           const dbData = response.data;
           setDisplayedGross(dbData.grossSalary || selectedEmployee.grossSalary);
@@ -77,21 +118,25 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             da: dbData.da?.toString() || "0",
             loan_deduction: dbData.loan_deduction?.toString() || "0",
             other_deduction: dbData.other_deduction?.toString() || "0",
+            loan_start_period: dbData.loan_start_period || "",
+            loan_duration_months: dbData.loan_duration_months?.toString() || "",
+            provident_fund: dbData.provident_fund?.toString() || "0",
             epf_applicable: !!dbData.epf_applicable,
             tax_applicable: !!dbData.tax_applicable,
             status: dbData.status || "active",
           });
         } else {
-          // Fallback to calculation
-          setDisplayedGross(selectedEmployee.grossSalary || 0);
+          // Fallback: no salary_settings row yet — start from the employee's
+          // last-known gross and derive the full 60/30/5/5 split from it.
           const gross = selectedEmployee.grossSalary || 0;
-          const basic = Math.floor(gross * 0.6);
+          const c = componentsFromGross(gross);
+          setDisplayedGross(gross);
           setSalaryForm({
             salary_grade: selectedEmployee.matchedPayroll?.grade || "",
-            basic_salary: basic.toString(),
-            house_rent: Math.floor(basic * 0.25).toString(),
-            medical_allowance: "0",
-            transport_allowance: "0",
+            basic_salary: c.basic.toString(),
+            house_rent: c.houseRent.toString(),
+            medical_allowance: c.medical.toString(),
+            transport_allowance: c.transport.toString(),
             mobile_allowance: "0",
             other_allowances: "0",
             advance_installment: "0",
@@ -100,6 +145,9 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             da: "0",
             loan_deduction: "0",
             other_deduction: "0",
+            loan_start_period: "",
+            loan_duration_months: "",
+            provident_fund: "0",
             epf_applicable: true,
             tax_applicable: true,
             status: selectedEmployee.status || "active",
@@ -122,31 +170,62 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
     })}`;
   };
 
+  // BIZ-PAY-01: Gross Salary = Basic + House Rent + Medical + Conveyance
+  // ONLY. Mobile Allowance and Other Allowance are additional components on
+  // top of Gross (still paid, just not part of "Gross Salary" or the
+  // Festival Bonus base) — confirmed against the calculation tool Anik
+  // shared, which treats them as benefit allowances added to net pay only.
   const calculateGross = () => {
     return (
       (parseInt(salaryForm.basic_salary) || 0) +
       (parseInt(salaryForm.house_rent) || 0) +
       (parseInt(salaryForm.medical_allowance) || 0) +
-      (parseInt(salaryForm.transport_allowance) || 0) +
-      (parseInt(salaryForm.mobile_allowance) || 0) +
-      (parseInt(salaryForm.other_allowances) || 0)
+      (parseInt(salaryForm.transport_allowance) || 0)
     );
   };
 
   const currentGross = calculateGross();
+  const mobileAndOther = (parseInt(salaryForm.mobile_allowance) || 0) + (parseInt(salaryForm.other_allowances) || 0);
 
-  // BIZ-PAY-01: applying a grade's defaults pre-fills the allowance fields
-  // from the structure band instead of HR retyping every figure — still
-  // fully editable afterward, this is a starting point, not a lock.
+  // Typing Gross Salary derives Basic/House Rent/Medical/Conveyance forward
+  // — this is the primary flow ("just input gross, everything is auto
+  // calculated") from the calculator Anik shared.
+  const handleGrossChange = (value) => {
+    const c = componentsFromGross(value);
+    setSalaryForm((prev) => ({
+      ...prev,
+      basic_salary: c.basic.toString(),
+      house_rent: c.houseRent.toString(),
+      medical_allowance: c.medical.toString(),
+      transport_allowance: c.transport.toString(),
+    }));
+  };
+
+  // Typing Basic Salary derives Gross backward, then the same forward split
+  // — for when HR knows Basic instead (e.g. from an offer letter).
+  const handleBasicChange = (value) => {
+    const basic = parseInt(value) || 0;
+    const c = componentsFromBasic(basic);
+    setSalaryForm((prev) => ({
+      ...prev,
+      basic_salary: value,
+      house_rent: c.houseRent.toString(),
+      medical_allowance: c.medical.toString(),
+      transport_allowance: c.transport.toString(),
+    }));
+  };
+
+  // BIZ-PAY-01: applying a grade's defaults pre-fills Mobile/Other/EPF from
+  // the structure band (House Rent/Medical/Conveyance are always derived
+  // from Basic via the fixed 60/30/5/5 split above, so a stale flat default
+  // for those three would just fight the formula) — still fully editable
+  // afterward, this is a starting point, not a lock.
   const applyStructureDefaults = (structureId) => {
     const structure = structures.find((s) => s._id === structureId);
     if (!structure) return;
     setSalaryForm((prev) => ({
       ...prev,
       salary_grade: structure.grade,
-      house_rent: String(structure.default_house_rent || 0),
-      medical_allowance: String(structure.default_medical_allowance || 0),
-      transport_allowance: String(structure.default_transport_allowance || 0),
       mobile_allowance: String(structure.default_mobile_allowance || 0),
       other_allowances: String(structure.default_other_allowances || 0),
       epf_applicable: !!structure.epf_applicable,
@@ -172,6 +251,9 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
       da: salaryForm.da,
       loan_deduction: salaryForm.loan_deduction,
       other_deduction: salaryForm.other_deduction,
+      loan_start_period: salaryForm.loan_deduction && Number(salaryForm.loan_deduction) > 0 ? salaryForm.loan_start_period || null : null,
+      loan_duration_months: salaryForm.loan_deduction && Number(salaryForm.loan_deduction) > 0 ? salaryForm.loan_duration_months || null : null,
+      provident_fund: salaryForm.provident_fund,
       epf_applicable: salaryForm.epf_applicable,
       tax_applicable: salaryForm.tax_applicable,
       status: salaryForm.status,
@@ -185,7 +267,7 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
         onOpenChange(false);
         onSuccess();
       }
-      
+
     } catch (err) {
       toast.error("Failed to save changes");
     } finally {
@@ -195,16 +277,39 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
 
   if (!selectedEmployee) return null;
 
+  const hasLoan = Number(salaryForm.loan_deduction || 0) > 0;
+  let loanMonthsRemaining = null;
+  if (hasLoan && salaryForm.loan_start_period && salaryForm.loan_duration_months) {
+    const [sy, sm] = salaryForm.loan_start_period.split("-").map(Number);
+    const now = new Date();
+    const elapsed = (now.getFullYear() - sy) * 12 + (now.getMonth() + 1 - sm) + 1;
+    loanMonthsRemaining = Math.max(0, Number(salaryForm.loan_duration_months) - Math.max(0, elapsed - 1));
+  }
+
+  const pctOfGross = (n) => (currentGross > 0 ? ((parseInt(n) || 0) / currentGross) * 100 : 0);
+  const componentWarning = (label, value, expectedPct) => {
+    const pct = pctOfGross(value);
+    if (currentGross <= 0) return null;
+    if (Math.abs(pct - expectedPct) > 2) {
+      return (
+        <span className="text-orange-600 ml-1">
+          ⚠️ {pct.toFixed(1)}% (should be ~{expectedPct}%)
+        </span>
+      );
+    }
+    return <span className="text-green-600 ml-1">✓ {pct.toFixed(1)}%</span>;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Employee Salary</DialogTitle>
           <DialogDescription>
-            Update salary details for {selectedEmployee.fullName || selectedEmployee.employee_name}. Basic salary should be approximately 60% of gross salary.
+            Update salary details for {selectedEmployee.fullName || selectedEmployee.employee_name}. Company formula: Basic 60% / House Rent 30% / Medical 5% / Conveyance 5% of Gross Salary.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           {/* Employee Info */}
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
@@ -258,9 +363,28 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500 mt-1">
-                Fills House Rent/Medical/Transport/Mobile/Other from that grade's band — still editable after.
+                Fills Mobile/Other/EPF from that grade's band — House Rent/Medical/Conveyance always follow the formula below.
               </p>
             </div>
+          </div>
+
+          {/* Gross Salary — primary input: type this and everything below auto-fills */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <Label htmlFor="edit_gross_salary" className="text-blue-900 font-semibold">
+              Gross Salary <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="edit_gross_salary"
+              type="number"
+              min="0"
+              value={currentGross || ""}
+              onChange={(e) => handleGrossChange(e.target.value)}
+              placeholder="100000"
+              className="text-lg font-semibold bg-white mt-1"
+            />
+            <p className="text-xs text-blue-700 mt-1">
+              Type Gross here and Basic/House Rent/Medical/Conveyance below fill in automatically (60/30/5/5). Or type Basic below instead — either way works.
+            </p>
           </div>
 
           {/* Basic Salary & House Rent */}
@@ -274,18 +398,13 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 type="number"
                 min="0"
                 value={salaryForm.basic_salary}
-                onChange={(e) => {
-                  const basic = parseInt(e.target.value) || 0;
-                  setSalaryForm(prev => ({ 
-                    ...prev, 
-                    basic_salary: e.target.value,
-                    house_rent: Math.floor(basic * 0.25).toString()
-                  }));
-                }}
+                onChange={(e) => handleBasicChange(e.target.value)}
                 placeholder="60000"
                 className="text-lg font-semibold"
               />
-              <p className="text-xs text-gray-500 mt-1">Should be ~60% of gross</p>
+              <p className="text-xs text-gray-500 mt-1">
+                60% of Gross{componentWarning("basic", salaryForm.basic_salary, 60)}
+              </p>
             </div>
             <div>
               <Label htmlFor="edit_house_rent">
@@ -297,10 +416,12 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 min="0"
                 value={salaryForm.house_rent}
                 onChange={(e) => setSalaryForm(prev => ({ ...prev, house_rent: e.target.value }))}
-                placeholder="15000"
+                placeholder="30000"
                 className="text-lg font-semibold"
               />
-              <p className="text-xs text-gray-500 mt-1">Typically 25% of basic</p>
+              <p className="text-xs text-gray-500 mt-1">
+                30% of Gross{componentWarning("house rent", salaryForm.house_rent, 30)}
+              </p>
             </div>
           </div>
 
@@ -316,6 +437,9 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 onChange={(e) => setSalaryForm(prev => ({ ...prev, medical_allowance: e.target.value }))}
                 placeholder="5000"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                5% of Gross{componentWarning("medical", salaryForm.medical_allowance, 5)}
+              </p>
             </div>
             <div>
               <Label htmlFor="edit_transport">Transport Allowance (Conveyance)</Label>
@@ -325,8 +449,11 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 min="0"
                 value={salaryForm.transport_allowance}
                 onChange={(e) => setSalaryForm(prev => ({ ...prev, transport_allowance: e.target.value }))}
-                placeholder="3000"
+                placeholder="5000"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                5% of Gross{componentWarning("conveyance", salaryForm.transport_allowance, 5)}
+              </p>
             </div>
             <div>
               <Label htmlFor="edit_mobile">Mobile Allowance</Label>
@@ -338,6 +465,7 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 onChange={(e) => setSalaryForm(prev => ({ ...prev, mobile_allowance: e.target.value }))}
                 placeholder="1500"
               />
+              <p className="text-xs text-gray-500 mt-1">Additional — on top of Gross, not part of the 60/30/5/5 split</p>
             </div>
             <div>
               <Label htmlFor="edit_other">Other Allowances</Label>
@@ -349,6 +477,7 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
                 onChange={(e) => setSalaryForm(prev => ({ ...prev, other_allowances: e.target.value }))}
                 placeholder="0"
               />
+              <p className="text-xs text-gray-500 mt-1">Additional — on top of Gross, not part of the 60/30/5/5 split</p>
             </div>
           </div>
 
@@ -429,31 +558,81 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             </div>
           </div>
 
-          {/* Applicability */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
+          {/* Loan Duration — only relevant once a Loan Deduction is set */}
+          {hasLoan && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div>
+                <Label htmlFor="edit_loan_start">Loan Start Period</Label>
+                <Input
+                  id="edit_loan_start"
+                  type="month"
+                  value={salaryForm.loan_start_period}
+                  onChange={(e) => setSalaryForm(prev => ({ ...prev, loan_start_period: e.target.value }))}
+                />
+                <p className="text-xs text-gray-500 mt-1">First payroll period this deduction applies to</p>
+              </div>
+              <div>
+                <Label htmlFor="edit_loan_duration">Duration (months)</Label>
+                <Input
+                  id="edit_loan_duration"
+                  type="number"
+                  min="1"
+                  value={salaryForm.loan_duration_months}
+                  onChange={(e) => setSalaryForm(prev => ({ ...prev, loan_duration_months: e.target.value }))}
+                  placeholder="e.g., 12"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {salaryForm.loan_start_period && salaryForm.loan_duration_months
+                    ? loanMonthsRemaining != null
+                      ? `${loanMonthsRemaining} of ${salaryForm.loan_duration_months} month(s) remaining — stops automatically after that.`
+                      : "Stops automatically after this many payroll runs."
+                    : "Leave blank to deduct indefinitely every month (old behavior)."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Provident Fund (PF) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div className="flex items-center space-x-2 pb-1">
               <Switch
                 id="edit_epf"
                 checked={salaryForm.epf_applicable}
                 onCheckedChange={(checked) => setSalaryForm(prev => ({ ...prev, epf_applicable: checked }))}
               />
-              <Label htmlFor="edit_epf">EPF Applicable</Label>
+              <div>
+                <Label htmlFor="edit_epf">Provident Fund (PF) Applicable</Label>
+                <p className="text-xs text-gray-500">Auto-calculated as 10% of Basic Salary</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="edit_tax"
-                checked={salaryForm.tax_applicable}
-                onCheckedChange={(checked) => setSalaryForm(prev => ({ ...prev, tax_applicable: checked }))}
+            <div>
+              <Label htmlFor="edit_pf_override">PF Override Amount (optional)</Label>
+              <Input
+                id="edit_pf_override"
+                type="number"
+                min="0"
+                value={salaryForm.provident_fund}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, provident_fund: e.target.value }))}
+                placeholder="0"
               />
-              <Label htmlFor="edit_tax">Tax Applicable</Label>
+              <p className="text-xs text-gray-500 mt-1">Leave at 0 to use the automatic 10% of Basic — set a figure here only to override it for this employee.</p>
             </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="edit_tax"
+              checked={salaryForm.tax_applicable}
+              onCheckedChange={(checked) => setSalaryForm(prev => ({ ...prev, tax_applicable: checked }))}
+            />
+            <Label htmlFor="edit_tax">Tax (AIT) Applicable</Label>
           </div>
 
           {/* Status */}
           <div>
             <Label htmlFor="edit_status">Status</Label>
-            <Select 
-              value={salaryForm.status} 
+            <Select
+              value={salaryForm.status}
               onValueChange={(value) => setSalaryForm(prev => ({ ...prev, status: value }))}
             >
               <SelectTrigger id="edit_status">
@@ -471,25 +650,21 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">New Gross Salary</p>
+                <p className="text-sm font-medium text-green-700">Gross Salary</p>
                 <p className="text-xs text-green-600 mt-1 uppercase">
-                  Based on sum of all components
+                  Basic + House Rent + Medical + Conveyance
                 </p>
               </div>
               <p className="text-3xl font-bold text-green-900">
                 {formatCurrency(currentGross)}
               </p>
             </div>
-            <div className="mt-2 pt-2 border-t border-green-300">
-              <p className="text-sm text-green-700">
-                Basic Salary Percentage: {
-                  (currentGross > 0 ? (parseInt(salaryForm.basic_salary) / currentGross) * 100 : 0).toFixed(1)
-                }% 
-                {((parseInt(salaryForm.basic_salary) / currentGross) * 100 < 55 || (parseInt(salaryForm.basic_salary) / currentGross) * 100 > 65) && (
-                  <span className="text-orange-600 ml-2">⚠️ Should be ~60%</span>
-                )}
-              </p>
-            </div>
+            {mobileAndOther > 0 && (
+              <div className="mt-2 pt-2 border-t border-green-300 flex items-center justify-between">
+                <p className="text-sm text-green-700">+ Mobile &amp; Other Allowance (paid on top, not part of Gross)</p>
+                <p className="text-sm font-semibold text-green-800">{formatCurrency(mobileAndOther)}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -498,7 +673,7 @@ const EditEmployeeSalaryDialog = ({ open, onOpenChange, employee: selectedEmploy
             <X className="w-4 h-4 mr-2" />
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleUpdateSalary}
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
             disabled={isSubmitting || !salaryForm.basic_salary || !salaryForm.house_rent}

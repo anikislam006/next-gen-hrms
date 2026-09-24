@@ -37,14 +37,13 @@ const CreateStructureDialog = () => {
     basic_min: "",
     basic_max: "",
     epf_applicable: true,
-    // BIZ-PAY-01: default allowance amounts for this grade/level band —
-    // "Basic Salary + House Rent + Medical Allowance + Conveyance = Gross
-    // Salary", per the business's salary-structure formula. Optional; an
-    // employee's individual salary can still be set/edited component by
-    // component regardless of these defaults.
-    default_house_rent: "",
-    default_medical_allowance: "",
-    default_transport_allowance: "",
+    // BIZ-PAY-01, confirmed with Anik (2026-09-24): House Rent/Medical/
+    // Conveyance are ALWAYS derived automatically from Basic Salary via the
+    // fixed company formula (Basic 60% / House Rent 30% / Medical 5% /
+    // Conveyance 5% of Gross) — they're not grade-specific, so there's
+    // nothing to set here for them. Mobile Allowance and Other Allowance are
+    // the business's own "additional" components on top of Gross, so those
+    // stay configurable as a per-grade default preset.
     default_mobile_allowance: "",
     default_other_allowances: "",
   });
@@ -70,9 +69,6 @@ const CreateStructureDialog = () => {
           basic_min: "",
           basic_max: "",
           epf_applicable: true,
-          default_house_rent: "",
-          default_medical_allowance: "",
-          default_transport_allowance: "",
           default_mobile_allowance: "",
           default_other_allowances: "",
         });
@@ -189,49 +185,28 @@ const CreateStructureDialog = () => {
             </div>
           </div>
 
-          {/* Default allowances (BIZ-PAY-01): Basic Salary + House Rent +
-              Medical Allowance + Conveyance = Gross Salary, per the
-              business's formula. These pre-fill an employee's individual
-              salary when this grade is applied — still editable per person. */}
+          {/* BIZ-PAY-01, confirmed with Anik (2026-09-24): Basic Salary +
+              House Rent + Medical Allowance + Conveyance = Gross Salary,
+              split 60% / 30% / 5% / 5% of Gross — a fixed company formula,
+              not something that varies by grade. Whatever Basic (or Gross)
+              gets entered on an employee's individual salary always derives
+              House Rent/Medical/Conveyance automatically from this formula.
+              Mobile Allowance and Other Allowance are the business's own
+              "additional" components on top of Gross, so those stay
+              grade-configurable presets here. */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+            <p className="text-xs text-blue-800">
+              House Rent (30%), Medical (5%) and Conveyance (5%) are calculated automatically from Basic Salary for every
+              employee — no need to set them per grade.
+            </p>
+          </div>
           <div className="space-y-2">
-            <Label>Default Allowances for this Grade (optional)</Label>
+            <Label>Default Additional Allowances for this Grade (optional)</Label>
             <p className="text-xs text-gray-500">
               Pre-fills these amounts when this structure is applied to an employee's salary — each
               employee's figures stay individually editable afterward.
             </p>
             <div className="grid grid-cols-2 gap-4 pt-1">
-              <div className="space-y-1">
-                <Label htmlFor="default_house_rent" className="text-xs text-gray-600">House Rent</Label>
-                <Input
-                  id="default_house_rent"
-                  type="number"
-                  value={structureForm.default_house_rent}
-                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_house_rent: e.target.value }))}
-                  placeholder="e.g., 8000"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="default_medical_allowance" className="text-xs text-gray-600">Medical Allowance</Label>
-                <Input
-                  id="default_medical_allowance"
-                  type="number"
-                  value={structureForm.default_medical_allowance}
-                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_medical_allowance: e.target.value }))}
-                  placeholder="e.g., 2000"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="default_transport_allowance" className="text-xs text-gray-600">
-                  Transport Allowance (Conveyance)
-                </Label>
-                <Input
-                  id="default_transport_allowance"
-                  type="number"
-                  value={structureForm.default_transport_allowance}
-                  onChange={(e) => setStructureForm(prev => ({ ...prev, default_transport_allowance: e.target.value }))}
-                  placeholder="e.g., 1500"
-                />
-              </div>
               <div className="space-y-1">
                 <Label htmlFor="default_mobile_allowance" className="text-xs text-gray-600">Mobile Allowance</Label>
                 <Input
@@ -242,7 +217,7 @@ const CreateStructureDialog = () => {
                   placeholder="e.g., 500"
                 />
               </div>
-              <div className="space-y-1 col-span-2">
+              <div className="space-y-1">
                 <Label htmlFor="default_other_allowances" className="text-xs text-gray-600">Other Allowances</Label>
                 <Input
                   id="default_other_allowances"
@@ -255,10 +230,11 @@ const CreateStructureDialog = () => {
             </div>
           </div>
 
-          {/* EPF Applicability (BIZ-PAY-01) */}
+          {/* Provident Fund (PF) applicability (BIZ-PAY-07) — renamed from
+              "EPF" to match the business's own terminology. */}
           <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg border border-slate-100">
             <div>
-              <Label htmlFor="epf_applicable">EPF Applicable</Label>
+              <Label htmlFor="epf_applicable">Provident Fund (PF) Applicable</Label>
               <p className="text-xs text-gray-500">
                 Whether Provident Fund (10% of Basic) applies to employees on this structure
               </p>

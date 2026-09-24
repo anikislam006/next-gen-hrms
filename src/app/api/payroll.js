@@ -6,6 +6,23 @@ import { supabase } from "@/utils/supabaseClient";
 
 const PAGE_SIZE = 10;
 
+// BIZ-PAY-01, confirmed with the business (2026-09-24): "Basic Salary +
+// House Rent + Medical Allowance + Conveyance = Gross Salary" — split
+// Basic 60% / House Rent 30% / Medical 5% / Conveyance 5% of Gross.
+// Mobile Allowance and Other Allowance are explicitly listed as ADDITIONAL
+// components on top of Gross, not part of it — they still get paid (see
+// createPayrollRecords), they just don't count toward "Gross Salary" or the
+// Festival Bonus base (Gross x 60%). Used everywhere Gross is computed so
+// there's exactly one definition instead of three that can drift apart.
+function computeGrossSalary({ basic_salary, house_rent, medical_allowance, transport_allowance } = {}) {
+  return (
+    Number(basic_salary || 0) +
+    Number(house_rent || 0) +
+    Number(medical_allowance || 0) +
+    Number(transport_allowance || 0)
+  );
+}
+
 /* ============================== STRUCTURES ============================== */
 
 export const fetchPayrollStructures = async (page = 1, search = "") => {
@@ -100,8 +117,7 @@ function toEmployeePayrollShape(row) {
   const transportAllowance = Number(salary.transport_allowance || 0);
   const mobileAllowance = Number(salary.mobile_allowance || 0);
   const otherAllowances = Number(salary.other_allowances || 0);
-  const grossSalary =
-    basicSalary + houseRent + medicalAllowance + transportAllowance + mobileAllowance + otherAllowances;
+  const grossSalary = computeGrossSalary(salary);
 
   return {
     _id: row.id,
@@ -114,6 +130,9 @@ function toEmployeePayrollShape(row) {
     employmentType: row.employment_type || "Probation",
     joiningDate: row.joining_date,
     status: row.status,
+    // BIZ-PAY-08 AIT: picks the male/female nil-income band. Unset on the
+    // profile falls back to the 'male' band in createPayrollRecords.
+    gender: row.gender || null,
     matchedPayroll: salary.grade ? { grade: salary.grade } : null,
     basicSalary,
     houseRent,
@@ -129,6 +148,11 @@ function toEmployeePayrollShape(row) {
     da: Number(salary.da || 0),
     loanDeduction: Number(salary.loan_deduction || 0),
     otherDeduction: Number(salary.other_deduction || 0),
+    // Provident Fund (PF) override — 0/blank means "use the automatic 10% of
+    // Basic" (see createPayrollRecords); a positive value here overrides it.
+    providentFund: Number(salary.provident_fund || 0),
+    loanStartPeriod: salary.loan_start_period || null,
+    loanDurationMonths: salary.loan_duration_months != null ? Number(salary.loan_duration_months) : null,
     epfApplicable: !!salary.epf_applicable,
     taxApplicable: !!salary.tax_applicable,
     salaryStatus: salary.status || "active",
@@ -136,7 +160,7 @@ function toEmployeePayrollShape(row) {
 }
 
 const EMPLOYEE_PAYROLL_SELECT = `
-  id, employee_id, full_name, email, designation, employment_type, joining_date, status, department_id,
+  id, employee_id, full_name, email, designation, employment_type, joining_date, status, department_id, gender,
   departments:department_id ( name ),
   salary_settings ( * )
 `;
@@ -249,6 +273,17 @@ export const createSettingSalary = async (salaryData) => {
     da: Number(salaryData.da) || 0,
     loan_deduction: Number(salaryData.loan_deduction) || 0,
     other_deduction: Number(salaryData.other_deduction) || 0,
+    // Provident Fund (PF) — 10% of Basic is computed automatically at
+    // processing time (see createPayrollRecords); this column is only a
+    // manual per-employee override for when a different figure is needed.
+    // Renamed from the confusing "EPF" naming to match what the business
+    // actually calls it.
+    provident_fund: Number(salaryData.provident_fund) || 0,
+    // Loan Duration: how many payroll periods, starting from
+    // loan_start_period, the Loan Deduction above auto-applies for. NULL on
+    // either = indefinite (legacy behavior, unaffected).
+    loan_start_period: salaryData.loan_start_period || null,
+    loan_duration_months: salaryData.loan_duration_months ? Number(salaryData.loan_duration_months) : null,
     epf_applicable: !!salaryData.epf_applicable,
     tax_applicable: !!salaryData.tax_applicable,
     status: salaryData.status || "active",
@@ -261,13 +296,7 @@ export const createSettingSalary = async (salaryData) => {
     .single();
   if (error) throw error;
 
-  const grossOf = (row) =>
-    Number(row.basic_salary || 0) +
-    Number(row.house_rent || 0) +
-    Number(row.medical_allowance || 0) +
-    Number(row.transport_allowance || 0) +
-    Number(row.mobile_allowance || 0) +
-    Number(row.other_allowances || 0);
+  const grossOf = (row) => computeGrossSalary(row);
 
   if (previous) {
     const oldGross = grossOf(previous);
@@ -313,13 +342,7 @@ export const fetchSettingByEmail = async (email) => {
     if (error) throw error;
     if (!data) return { success: false, message: "No salary setting yet" };
 
-    const grossSalary =
-      Number(data.basic_salary || 0) +
-      Number(data.house_rent || 0) +
-      Number(data.medical_allowance || 0) +
-      Number(data.transport_allowance || 0) +
-      Number(data.mobile_allowance || 0) +
-      Number(data.other_allowances || 0);
+    const grossSalary = computeGrossSalary(data);
 
     return {
       success: true,
@@ -337,6 +360,9 @@ export const fetchSettingByEmail = async (email) => {
         da: data.da,
         loan_deduction: data.loan_deduction,
         other_deduction: data.other_deduction,
+        provident_fund: data.provident_fund,
+        loan_start_period: data.loan_start_period,
+        loan_duration_months: data.loan_duration_months,
         epf_applicable: data.epf_applicable,
         tax_applicable: data.tax_applicable,
         status: data.status,
@@ -363,8 +389,9 @@ function monthsWorkedInProbation(joiningDate, periodEnd) {
   return Math.max(0, Math.min(6, months + 1));
 }
 
-// Progressive tax over the tax_slabs table (BIZ-PAY-08). Returns 0 until the
-// business supplies rates — no slabs means no tax is deducted, by design.
+// Progressive tax over the tax_slabs table (BIZ-PAY-08), gender-aware nil
+// band, per the calculation tool Anik shared (2026-09-24). Returns 0 if no
+// slabs are loaded for that year (e.g. a future year not seeded yet).
 function makeTaxCalculator(slabs) {
   return (annualIncome) => {
     if (!slabs.length) return 0;
@@ -381,6 +408,30 @@ function makeTaxCalculator(slabs) {
   };
 }
 
+// Loan Duration (Anik's request): a Loan Deduction only applies for
+// `loanDurationMonths` consecutive payroll periods starting at
+// `loanStartPeriod`, then stops automatically — no separate "months already
+// paid" counter to keep in sync, it's derived from the period being
+// processed. Either field unset = old behavior (applies every period).
+function monthsElapsedInclusive(startPeriod, currentPeriod) {
+  const [sy, sm] = startPeriod.split("-").map(Number);
+  const [cy, cm] = currentPeriod.split("-").map(Number);
+  return (cy - sy) * 12 + (cm - sm) + 1;
+}
+
+function loanMonthsRemaining(item, period) {
+  if (!item.loanDurationMonths || !item.loanStartPeriod) return null;
+  const elapsed = monthsElapsedInclusive(item.loanStartPeriod, period);
+  return Math.max(0, Number(item.loanDurationMonths) - Math.max(0, elapsed - 1));
+}
+
+function isLoanActiveForPeriod(item, period) {
+  if (Number(item.loanDeduction || 0) <= 0) return false;
+  if (!item.loanDurationMonths || !item.loanStartPeriod) return true;
+  const elapsed = monthsElapsedInclusive(item.loanStartPeriod, period);
+  return elapsed >= 1 && elapsed <= Number(item.loanDurationMonths);
+}
+
 export const createPayrollRecords = async (payrollItems) => {
   try {
     if (!Array.isArray(payrollItems) || payrollItems.length === 0) {
@@ -391,20 +442,32 @@ export const createPayrollRecords = async (payrollItems) => {
     const [periodYear, periodMonth] = period.split("-").map(Number);
     const periodEnd = new Date(periodYear, periodMonth, 0);
 
-    let taxSlabs = [];
+    // BIZ-PAY-08: slabs are gender-specific (differing nil-income band), so
+    // load both sets once and pick per employee below.
+    let calcTaxByGender = { male: () => 0, female: () => 0 };
     if (config.applyTaxDeductions) {
       const { data } = await supabase
         .from("tax_slabs")
         .select("*")
         .eq("effective_year", periodYear)
         .order("min_income");
-      taxSlabs = data || [];
+      const slabs = data || [];
+      calcTaxByGender = {
+        male: makeTaxCalculator(slabs.filter((s) => s.gender !== "female")),
+        female: makeTaxCalculator(slabs.filter((s) => s.gender === "female")),
+      };
     }
-    const calcTax = makeTaxCalculator(taxSlabs);
 
     const rows = payrollItems.map((item) => {
       const basic = Number(item.basicSalary || 0);
       const gross = Number(item.grossSalary || 0);
+      // BIZ-PAY-01: Mobile Allowance and Other Allowance are explicitly
+      // listed as ADDITIONAL components on top of Gross Salary, not part of
+      // it — they still land in net pay, they just don't count toward Gross
+      // or the Festival Bonus base below (confirmed against the calculation
+      // tool Anik shared: these are "benefit allowances," added to net only).
+      const mobile = Number(item.mobileAllowance || 0);
+      const otherAllow = Number(item.otherAllowances || 0);
       const arrear = Number(item.arrear || 0);
       const ta = Number(item.ta || 0);
       const da = Number(item.da || 0);
@@ -419,18 +482,28 @@ export const createPayrollRecords = async (payrollItems) => {
             : fullBonus;
       }
 
-      // BIZ-PAY-07: Provident Fund = 10% of Basic Salary, a real per-employee line.
-      const pf = config.applyEpfDeductions && item.epfApplicable ? basic * 0.1 : 0;
+      // BIZ-PAY-07: Provident Fund (PF) = 10% of Basic Salary, a real
+      // per-employee line — unless a manual override amount is set on the
+      // employee's salary settings (renamed/consolidated from the old
+      // separate, unused "EPF" vs "PF" fields into this one).
+      const pfOverride = Number(item.providentFund || 0);
+      const pf =
+        pfOverride > 0 ? pfOverride : config.applyEpfDeductions && item.epfApplicable ? basic * 0.1 : 0;
 
-      // BIZ-PAY-08: AIT — 0 until tax_slabs has rows for this year.
-      const tax = config.applyTaxDeductions ? calcTax(gross * 12) : 0;
+      // BIZ-PAY-08: AIT — taxable annual income excludes PF, per the
+      // confirmed formula ((Gross - PF) x 12), using the employee's own
+      // gender for the nil-income band (defaults to the 'male' band if not
+      // set on the profile yet).
+      const calcTax = calcTaxByGender[item.gender === "female" ? "female" : "male"];
+      const tax = config.applyTaxDeductions ? calcTax(Math.max(0, gross - pf) * 12) : 0;
 
       const advanceTotal = Number(item.advanceInstallment || 0) + Number(item.advanceDeduction || 0);
       const otherTotal = Number(item.otherDeduction || 0) + Number(item.otherDeductions || 0);
-      const loanTotal = Number(item.loanDeduction || 0);
+      const loanActive = isLoanActiveForPeriod(item, period);
+      const loanTotal = loanActive ? Number(item.loanDeduction || 0) : 0;
 
       const deductions = pf + tax + advanceTotal + otherTotal + loanTotal;
-      const netSalary = gross + arrear + ta + da + bonus - deductions;
+      const netSalary = gross + mobile + otherAllow + arrear + ta + da + bonus - deductions;
 
       return {
         profile_id: item.employeeRefId || item._id,
@@ -452,6 +525,9 @@ export const createPayrollRecords = async (payrollItems) => {
           arrear,
           ta,
           da,
+          providentFundOverride: pfOverride,
+          loanActive,
+          loanMonthsRemaining: loanMonthsRemaining(item, period),
           bonusAmount: bonus,
           epfAmount: pf,
           taxAmount: tax,
