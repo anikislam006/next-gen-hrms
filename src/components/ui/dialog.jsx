@@ -4,7 +4,36 @@ import { X } from "lucide-react"
 
 import { cn } from "./utils"
 
-const Dialog = DialogPrimitive.Root
+// Radix's Dialog locks the rest of the page (body pointer-events: none)
+// while open, and normally releases it the moment the dialog closes. When a
+// dialog contains another portalled Radix component (e.g. a <Select> used
+// for "Apply a structure's defaults" inside Edit Employee Salary) and the
+// dialog is closed programmatically right after that inner component was
+// used — as happens on a successful save — that release can get missed,
+// leaving the whole app unclickable until a manual page reload. This wrapper
+// is a safety net: shortly after any dialog closes, if nothing else is still
+// genuinely open, it clears a stuck lock so the rest of the page stays
+// usable. It never touches a lock that a still-open dialog legitimately needs.
+const Dialog = ({ onOpenChange, ...props }) => {
+  const handleOpenChange = React.useCallback(
+    (nextOpen) => {
+      onOpenChange?.(nextOpen)
+      if (!nextOpen) {
+        setTimeout(() => {
+          const stillOpen = document.querySelector(
+            '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+          )
+          if (!stillOpen && document.body.style.pointerEvents === "none") {
+            document.body.style.pointerEvents = ""
+          }
+        }, 150)
+      }
+    },
+    [onOpenChange]
+  )
+
+  return <DialogPrimitive.Root onOpenChange={handleOpenChange} {...props} />
+}
 const DialogTrigger = DialogPrimitive.Trigger
 const DialogPortal = DialogPrimitive.Portal
 const DialogClose = DialogPrimitive.Close
