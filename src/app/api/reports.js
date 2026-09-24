@@ -26,6 +26,15 @@ function deptName(row) {
   return row?.departments?.name || "Unassigned";
 }
 
+// Same "real employee_id column, else first 8 chars of the profile UUID"
+// fallback used everywhere else in the app (employeeProfiles.js) — the
+// employee_id column is null for every profile in practice, so without this
+// fallback these reports showed a blank Employee ID column.
+function employeeIdOf(profileRow) {
+  if (!profileRow) return "";
+  return profileRow.employee_id || (profileRow.id ? profileRow.id.slice(0, 8).toUpperCase() : "");
+}
+
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -378,7 +387,7 @@ export async function getSalaryIncrementReport({ from, to } = {}) {
     .from("employee_history")
     .select(`
       id, old_value, new_value, remark, effective_date, created_at,
-      profiles:profile_id ( employee_id, full_name, department_id, departments:department_id ( name ) )
+      profiles:profile_id ( id, employee_id, full_name, department_id, departments:department_id ( name ) )
     `)
     .eq("change_type", "salary")
     .order("effective_date", { ascending: false });
@@ -390,7 +399,7 @@ export async function getSalaryIncrementReport({ from, to } = {}) {
   if (error) throw error;
 
   const rows = (data || []).map((r) => ({
-    employeeId: r.profiles?.employee_id || "",
+    employeeId: employeeIdOf(r.profiles),
     fullName: r.profiles?.full_name || "",
     department: deptName(r.profiles),
     effectiveDate: r.effective_date,
@@ -421,7 +430,7 @@ export async function getSalaryIncrementReport({ from, to } = {}) {
 const PAYROLL_WITH_PROFILE = `
   id, payroll_period, gross_salary, net_salary, deductions, epf_amount,
   tax_amount, bonus_amount, status,
-  profiles:profile_id ( employee_id, full_name, department_id, departments:department_id ( name ) )
+  profiles:profile_id ( id, employee_id, full_name, department_id, departments:department_id ( name ) )
 `;
 
 // 10. Department-wise payroll report (for one period, default current month)
@@ -471,7 +480,7 @@ export async function getAllEmployeePayrollReport({ month, year } = {}) {
   if (error) throw error;
 
   const rows = (data || []).map((r) => ({
-    employeeId: r.profiles?.employee_id || "",
+    employeeId: employeeIdOf(r.profiles),
     fullName: r.profiles?.full_name || "",
     department: deptName(r.profiles),
     grossSalary: Number(r.gross_salary || 0),
@@ -507,7 +516,7 @@ export async function getProvidentFundReport({ month, year } = {}) {
   if (error) throw error;
 
   const rows = (data || []).map((r) => ({
-    employeeId: r.profiles?.employee_id || "",
+    employeeId: employeeIdOf(r.profiles),
     fullName: r.profiles?.full_name || "",
     department: deptName(r.profiles),
     epfAmount: Number(r.epf_amount || 0),
@@ -647,9 +656,9 @@ export async function getYearlyBonusReport({ year } = {}) {
 
   const byEmployee = new Map();
   for (const r of data || []) {
-    const key = r.profiles?.employee_id || r.id;
+    const key = r.profiles?.id || r.id;
     const entry = byEmployee.get(key) || {
-      employeeId: r.profiles?.employee_id || "",
+      employeeId: employeeIdOf(r.profiles),
       fullName: r.profiles?.full_name || "",
       department: deptName(r.profiles),
       totalBonus: 0,
@@ -678,7 +687,7 @@ export async function getPreviousSalaryReport() {
     .from("employee_history")
     .select(`
       old_value, new_value, effective_date, profile_id,
-      profiles:profile_id ( employee_id, full_name, department_id, departments:department_id ( name ) )
+      profiles:profile_id ( id, employee_id, full_name, department_id, departments:department_id ( name ) )
     `)
     .eq("change_type", "salary")
     .order("effective_date", { ascending: false });
@@ -690,7 +699,7 @@ export async function getPreviousSalaryReport() {
   }
 
   const rows = Array.from(latestByProfile.values()).map((r) => ({
-    employeeId: r.profiles?.employee_id || "",
+    employeeId: employeeIdOf(r.profiles),
     fullName: r.profiles?.full_name || "",
     department: deptName(r.profiles),
     previousSalary: r.old_value,
@@ -726,7 +735,7 @@ export async function getPreviousBonusReport({ year } = {}) {
   if (error) throw error;
 
   const rows = (data || []).map((r) => ({
-    employeeId: r.profiles?.employee_id || "",
+    employeeId: employeeIdOf(r.profiles),
     fullName: r.profiles?.full_name || "",
     department: deptName(r.profiles),
     period: r.payroll_period,

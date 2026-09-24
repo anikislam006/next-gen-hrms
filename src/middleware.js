@@ -57,21 +57,27 @@ export function middleware(req) {
   return NextResponse.next();
 }
 
-// Map a role to where they should land if they try to access something else
+// Map a role to where they should land if they try to access something else.
+// Each portal's real home page lives at "<portal>/app-dashboard" — the bare
+// "/admin" and "/super-admin" routes are unfinished placeholders, and a
+// "/today" path was never built for any portal, so sending people there
+// used to land them on a blank 404 instead of their dashboard.
 function roleToHomePath(role) {
   switch (role) {
     case "SuperAdmin":
-      return "/super-admin/today";
+      return "/super-admin/app-dashboard";
     case "Admin":
-      return "/admin/today";
+      return "/admin/app-dashboard";
     case "Employee":
-      return "/employee/today";
+      return "/employee/app-dashboard";
     case "HR":
     case "Head_of_HR":
     case "HR_Manager":
-      return "/hr/today";
     case "Manager":
-      return "/manager/today";
+      // The HR and Manager portals haven't been built yet (no /hr or
+      // /manager routes exist), so there's nowhere real to send these
+      // roles yet — back to sign-in is the safe fallback.
+      return "/signin";
     default:
       return "/signin";
   }
